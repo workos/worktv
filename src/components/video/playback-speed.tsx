@@ -7,7 +7,7 @@ interface PlaybackSpeedProps {
   onRateChange: (rate: number) => void;
 }
 
-const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const speeds = [1, 1.2, 1.5, 1.7, 2, 2.2];
 
 export function PlaybackSpeed({ rate, onRateChange }: PlaybackSpeedProps) {
   const [isOpen, setIsOpen] = useState(false);

@@ -48,19 +48,10 @@ export function RecordingPlayer({ recording, videoViews = [] }: RecordingPlayerP
     };
   }, [captionsUrl]);
 
-  // Toggle captions track mode when state changes
+  // Toggle captions
   const toggleCaptions = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newEnabled = !captionsEnabled;
-    setCaptionsEnabled(newEnabled);
-
-    // Set the track mode
-    if (video.textTracks.length > 0) {
-      video.textTracks[0].mode = newEnabled ? "showing" : "hidden";
-    }
-  }, [captionsEnabled]);
+    setCaptionsEnabled((prev) => !prev);
+  }, []);
 
   // Use the selected view's URL, or fall back to recording.videoUrl
   const currentVideoUrl = videoViews.length > 0
@@ -68,6 +59,7 @@ export function RecordingPlayer({ recording, videoViews = [] }: RecordingPlayerP
     : recording.videoUrl;
   const {
     state,
+    play,
     togglePlay,
     seek,
     seekRelative,
@@ -76,6 +68,12 @@ export function RecordingPlayer({ recording, videoViews = [] }: RecordingPlayerP
     setPlaybackRate,
     toggleFullscreen,
   } = useVideoPlayer(videoRef);
+
+  // Seek to time and start playing
+  const seekAndPlay = useCallback((time: number) => {
+    seek(time);
+    play();
+  }, [seek, play]);
 
   const handleVolumeUp = useCallback(() => {
     setVolume(Math.min(1, state.volume + 0.1));
@@ -227,13 +225,13 @@ export function RecordingPlayer({ recording, videoViews = [] }: RecordingPlayerP
               <TranscriptPanel
                 segments={recording.transcript}
                 currentTime={state.currentTime}
-                onSeek={seek}
+                onSeek={seekAndPlay}
               />
             ) : (
               <ChatPanel
                 messages={recording.chatMessages ?? []}
                 currentTime={state.currentTime}
-                onSeek={seek}
+                onSeek={seekAndPlay}
               />
             )}
           </section>

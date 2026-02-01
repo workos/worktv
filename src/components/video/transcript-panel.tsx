@@ -32,11 +32,20 @@ export function TranscriptPanel({
   );
 
   useEffect(() => {
-    if (currentSegment && segmentRefs.current.has(currentSegment.id)) {
+    if (currentSegment && segmentRefs.current.has(currentSegment.id) && containerRef.current) {
       const element = segmentRefs.current.get(currentSegment.id);
-      element?.scrollIntoView({
+      const container = containerRef.current;
+      if (!element) return;
+
+      // Calculate scroll position to center the element within the container
+      const elementTop = element.offsetTop;
+      const elementHeight = element.offsetHeight;
+      const containerHeight = container.clientHeight;
+      const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2);
+
+      container.scrollTo({
+        top: Math.max(0, scrollTarget),
         behavior: "smooth",
-        block: "center",
       });
     }
   }, [currentSegment]);

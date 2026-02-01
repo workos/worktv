@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<p align="center">
+  <img src="public/logo.png" alt="WorkOS TV" width="200" />
+</p>
 
-## Getting Started
+# WorkOS TV
 
-First, run the development server:
+A private video library for your Zoom meeting recordings. Sync recordings from Zoom, then browse, search, and watch with full transcript support.
+
+## Features
+
+- **Zoom Integration** - Automatically sync recordings, transcripts, chat logs, and AI summaries from Zoom
+- **Full-Text Search** - Search across meeting titles, descriptions, and transcript content
+- **Speaker Filtering** - Filter recordings by participant name
+- **Transcript Playback** - Click any transcript line to jump to that moment in the video
+- **Speaker Timeline** - Visual timeline showing who spoke when
+- **Multiple Views** - Switch between speaker view, gallery view, shared screen, etc.
+- **Chat Messages** - View meeting chat alongside the video
+- **Captions** - Toggle captions generated from the transcript
+- **Keyboard Shortcuts** - Space to play/pause, arrow keys to seek, and more
+- **Dark/Light Theme** - System-aware theme with manual toggle
+
+## Setup
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Create a `.env.local` file with your Zoom Server-to-Server OAuth credentials:
+   ```
+   ZOOM_ACCOUNT_ID=your_account_id
+   ZOOM_CLIENT_ID=your_client_id
+   ZOOM_CLIENT_SECRET=your_client_secret
+   ```
+
+3. Sync recordings from Zoom:
+   ```bash
+   npm run sync
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000)
+
+## Sync Options
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Sync last 3 years (default)
+npm run sync
+
+# Sync last N years
+npm run sync -- --years=1
+
+# Force re-sync all recordings
+npm run sync -- --force
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Keyboard Shortcuts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Key | Action |
+|-----|--------|
+| `Space` | Play / Pause |
+| `←` | Seek back 5 seconds |
+| `→` | Seek forward 5 seconds |
+| `↑` | Volume up |
+| `↓` | Volume down |
+| `M` | Toggle mute |
+| `F` | Toggle fullscreen |
+| `C` | Toggle captions |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js](https://nextjs.org) 16 with App Router
+- [React](https://react.dev) 19
+- [Tailwind CSS](https://tailwindcss.com) 4
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) for local storage
+- [Zoom Server-to-Server OAuth](https://developers.zoom.us/docs/internal-apps/s2s-oauth/) for API access

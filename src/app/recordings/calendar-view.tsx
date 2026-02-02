@@ -179,7 +179,8 @@ export function CalendarView({ recordings }: { recordings: Recording[] }) {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/50 overflow-hidden light:border-zinc-200 light:bg-white">
+    // 180px accounts for: header (64px) + page padding (32px) + tabs/controls (~84px)
+    <div className="max-h-[calc(100vh-180px)] overflow-y-auto rounded-xl border border-white/10 bg-zinc-900/50 light:border-zinc-200 light:bg-white">
       {/* Sticky header with day names - 6 columns */}
       <div className="sticky top-0 z-10 grid grid-cols-6 border-b border-white/10 bg-zinc-800/90 backdrop-blur light:border-zinc-200 light:bg-zinc-100/90">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Weekend"].map((day) => (

@@ -273,14 +273,20 @@ interface ExtractGifOptions {
 }
 
 async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
-  const { videoUrl, startTime, outputPath, candidateNum, attemptNum, maxAttempts } = opts;
+  const { videoUrl, startTime, outputPath, candidateNum } = opts;
 
   return new Promise((resolve) => {
     const ffmpegStart = Date.now();
+    let resolved = false;
+
+    const done = (success: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+      resolve(success);
+    };
 
     // Use -ss before -i for fast input seeking via HTTP Range requests
-    // Don't use -seekable flag - let FFmpeg auto-detect from HTTP headers
-    // Use simple filter to avoid buffering issues with complex palette generation
     const args = [
       ...(DEBUG_FFMPEG ? ["-loglevel", "debug"] : []),
       "-ss", startTime.toString(),
@@ -301,14 +307,10 @@ async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
     });
 
     let stderr = "";
-    let lastProgressTime = Date.now();
 
     ffmpeg.stderr.on("data", (data) => {
       stderr += data.toString();
-      lastProgressTime = Date.now();
-
       if (DEBUG_FFMPEG) {
-        // Look for interesting debug lines
         const lines = data.toString().split("\n");
         for (const line of lines) {
           if (line.includes("Range") || line.includes("HTTP") || line.includes("Opening") || line.includes("seekable")) {
@@ -320,20 +322,18 @@ async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
 
     ffmpeg.on("close", (code) => {
       const elapsed = Date.now() - ffmpegStart;
-
       if (code === 0 && existsSync(outputPath)) {
         if (DEBUG_FFMPEG) {
-          // Check for signs of slow sequential download vs fast Range seek
           const hadRangeRequest = stderr.includes("Range:") || stderr.includes("bytes=");
           const seekableDetected = stderr.includes("seekable: 1") || stderr.includes("is_streamed=0");
           console.log(`        [DEBUG] GIF ${candidateNum} done in ${elapsed}ms (Range: ${hadRangeRequest}, Seekable: ${seekableDetected})`);
         }
-        resolve(true);
+        done(true);
       } else {
         if (DEBUG_FFMPEG && stderr) {
           console.log(`        [DEBUG] GIF ${candidateNum} failed (exit=${code}): ${stderr.slice(-200)}`);
         }
-        resolve(false);
+        done(false);
       }
     });
 
@@ -341,11 +341,12 @@ async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
       if (DEBUG_FFMPEG) {
         console.log(`        [DEBUG] GIF ${candidateNum} error: ${err.message}`);
       }
-      resolve(false);
+      done(false);
     });
 
-    // Timeout - use SIGKILL for forceful termination (SIGTERM may not work if blocked on I/O)
-    setTimeout(() => {
+    // Timeout - use SIGKILL for forceful termination
+    const timeoutId = setTimeout(() => {
+      if (resolved) return;
       timingStats.timeouts++;
       ffmpeg.kill("SIGKILL");
       // Clean up partial output file if it exists
@@ -356,7 +357,7 @@ async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
           // Ignore cleanup errors
         }
       }
-      resolve(false);
+      done(false);
     }, FFMPEG_TIMEOUT_MS);
   });
 }

@@ -17,9 +17,9 @@ export default async function RecordingsLayout({ children }: { children: ReactNo
               <Image
                 src="/logo.png"
                 alt="WorkTV"
-                width={64}
-                height={64}
-                className="h-16 w-16"
+                width={80}
+                height={80}
+                className="h-20 w-20"
               />
             </Link>
             <div id="nav-title" className="flex flex-1 justify-center" />

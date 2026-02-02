@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { RecordingPreview } from "./recording-preview";
+import { RecordingGridCard } from "./recording-grid-card";
 import { LocalDateTime } from "@/components/local-datetime";
 
 interface Speaker {
@@ -23,6 +24,7 @@ export interface RecordingWithMeta {
   hasTranscript: boolean;
   posterUrl: string | null;
   previewGifUrl: string | null;
+  summaryBrief?: string | null;
 }
 
 interface RecordingsInfiniteScrollProps {
@@ -30,6 +32,7 @@ interface RecordingsInfiniteScrollProps {
   initialHasMore: boolean;
   initialCursor: string | null;
   source: "zoom" | "gong" | "all";
+  viewMode?: "list" | "grid";
 }
 
 export function RecordingsInfiniteScroll({
@@ -37,6 +40,7 @@ export function RecordingsInfiniteScroll({
   initialHasMore,
   initialCursor,
   source,
+  viewMode = "list",
 }: RecordingsInfiniteScrollProps) {
   const [recordings, setRecordings] = useState(initialRecordings);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -62,6 +66,9 @@ export function RecordingsInfiniteScroll({
         cursor,
         limit: "20",
       });
+      if (viewMode === "grid") {
+        params.set("includeSummaries", "true");
+      }
       const response = await fetch(`/api/recordings/paginated?${params}`);
       const data = await response.json();
 
@@ -73,7 +80,7 @@ export function RecordingsInfiniteScroll({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, hasMore, cursor, source]);
+  }, [isLoading, hasMore, cursor, source, viewMode]);
 
   // Keep loadMore ref updated
   useEffect(() => {
@@ -96,6 +103,44 @@ export function RecordingsInfiniteScroll({
 
     return () => observer.disconnect();
   }, []);
+
+  if (viewMode === "grid") {
+    return (
+      <div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {recordings.map((recording) => (
+            <RecordingGridCard
+              key={recording.id}
+              id={recording.id}
+              title={recording.title}
+              customTitle={recording.custom_title}
+              source={recording.source}
+              duration={recording.duration}
+              createdAt={recording.created_at}
+              speakers={recording.speakers}
+              posterUrl={recording.posterUrl}
+              previewGifUrl={recording.previewGifUrl}
+              summaryBrief={recording.summaryBrief ?? null}
+            />
+          ))}
+        </div>
+
+        {/* Infinite scroll loader */}
+        <div ref={loaderRef} className="py-4">
+          {isLoading && (
+            <div className="flex justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+            </div>
+          )}
+          {!hasMore && recordings.length > 0 && (
+            <p className="text-center text-xs text-zinc-500">
+              All {recordings.length} recordings loaded
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-2 light:border-zinc-200 light:bg-white">

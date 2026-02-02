@@ -20,7 +20,8 @@ const GIF_DURATION = 3; // seconds
 const GIF_WIDTH = 320; // pixels
 const GIF_FPS = 10;
 const NUM_CANDIDATES = 5;
-const FFMPEG_TIMEOUT_MS = 60000; // 60 seconds per GIF extraction
+const FFMPEG_TIMEOUT_MS = 90000; // 90 seconds per GIF extraction (increased from 60s)
+const MAX_RETRIES = 2; // retry failed extractions up to 2 times
 
 // Default parallelism settings (can be overridden via CLI args)
 const DEFAULT_PARALLEL_RECORDINGS = 3;
@@ -297,11 +298,11 @@ async function extractGif(
       resolve(false);
     });
 
-    // Timeout
+    // Timeout - use SIGKILL for forceful termination (SIGTERM may not work if blocked on I/O)
     setTimeout(() => {
       const elapsed = Date.now() - ffmpegStart;
       console.log(`     ffmpeg timeout after ${elapsed}ms`);
-      ffmpeg.kill();
+      ffmpeg.kill("SIGKILL");
       // Clean up partial output file if it exists
       if (existsSync(outputPath)) {
         try {
@@ -448,28 +449,39 @@ async function processRecording(
         const outputPath = join(tempDir, `candidate_${i}.gif`);
         const gifStart = Date.now();
 
-        let urlToUse = videoSource;
+        // Retry loop for failed extractions
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          let urlToUse = videoSource;
 
-        // For Gong, fetch fresh URL for each extraction
-        if (gongCallId) {
-          if (DEBUG_FFMPEG) console.log(`      [DEBUG] Fetching fresh Gong URL for candidate ${i + 1}...`);
-          const freshUrl = await getGongRecordingUrl(gongCallId);
-          if (!freshUrl) {
-            console.log(`      ✗ Candidate ${i + 1} - could not get fresh URL`);
-            return null;
+          // For Gong, fetch fresh URL for each extraction (and retry)
+          if (gongCallId) {
+            if (DEBUG_FFMPEG) console.log(`      [DEBUG] Fetching fresh Gong URL for candidate ${i + 1}...`);
+            const freshUrl = await getGongRecordingUrl(gongCallId);
+            if (!freshUrl) {
+              console.log(`      ✗ Candidate ${i + 1} - could not get fresh URL`);
+              return null;
+            }
+            urlToUse = freshUrl;
           }
-          urlToUse = freshUrl;
-        }
 
-        const success = await extractGif(urlToUse, timestamp, outputPath);
+          const success = await extractGif(urlToUse, timestamp, outputPath);
+
+          if (success) {
+            const gifElapsed = Date.now() - gifStart;
+            const retryNote = attempt > 0 ? ` (retry ${attempt})` : "";
+            console.log(`      ✓ Candidate ${i + 1} @ ${Math.floor(timestamp/60)}:${(timestamp%60).toString().padStart(2, "0")} (${formatDuration(gifElapsed)})${retryNote}`);
+            return outputPath;
+          }
+
+          // Log retry attempt
+          if (attempt < MAX_RETRIES) {
+            console.log(`      ↻ Candidate ${i + 1} retrying (attempt ${attempt + 2}/${MAX_RETRIES + 1})...`);
+          }
+        }
 
         const gifElapsed = Date.now() - gifStart;
-        if (success) {
-          console.log(`      ✓ Candidate ${i + 1} @ ${Math.floor(timestamp/60)}:${(timestamp%60).toString().padStart(2, "0")} (${formatDuration(gifElapsed)})`);
-        } else {
-          console.log(`      ✗ Candidate ${i + 1} failed (${formatDuration(gifElapsed)})`);
-        }
-        return success ? outputPath : null;
+        console.log(`      ✗ Candidate ${i + 1} failed after ${MAX_RETRIES + 1} attempts (${formatDuration(gifElapsed)})`);
+        return null;
       },
       parallelGifs
     );

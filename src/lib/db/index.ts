@@ -411,60 +411,57 @@ export function getAllUniqueSpeakers(): { name: string; color: string; count: nu
 
 export function searchRecordingsWithSpeaker(
   query: string,
-  speakerName: string,
+  speakerNames: string | string[],
   source?: "zoom" | "gong" | "all"
 ): RecordingRow[] {
   const db = getDb();
   const searchTerm = `%${escapeLikeWildcards(query)}%`;
   const sourceFilter = source && source !== "all" ? source : null;
 
+  // Normalize to array
+  const speakers = Array.isArray(speakerNames) ? speakerNames : [speakerNames];
+  if (speakers.length === 0) return [];
+
+  // Build placeholders for IN clause
+  const placeholders = speakers.map(() => "?").join(", ");
+
+  // Speaker filter: recording must have ALL selected speakers (AND logic)
+  // We count how many of the selected speakers are in each recording
+  // and only include recordings where the count equals the number we're looking for
+  const speakerFilter = `
+    (SELECT COUNT(DISTINCT sp.name) FROM speakers sp
+     WHERE sp.recording_id = r.id AND sp.name IN (${placeholders})) = ?`;
+
   if (query.trim()) {
     // Search with both text query and speaker filter
-    if (sourceFilter) {
-      return db
-        .prepare(
-          `SELECT DISTINCT r.* FROM recordings r
-           INNER JOIN speakers sp ON r.id = sp.recording_id
-           LEFT JOIN segments s ON r.id = s.recording_id
-           WHERE r.duration >= 60
-             AND r.source = ?
-             AND sp.name = ?
-             AND (r.title LIKE ? ESCAPE '\\' OR r.custom_title LIKE ? ESCAPE '\\' OR s.text LIKE ? ESCAPE '\\' OR s.speaker LIKE ? ESCAPE '\\')
-           ORDER BY r.created_at DESC`
-        )
-        .all(sourceFilter, speakerName, searchTerm, searchTerm, searchTerm, searchTerm) as RecordingRow[];
-    }
-    return db
-      .prepare(
-        `SELECT DISTINCT r.* FROM recordings r
-         INNER JOIN speakers sp ON r.id = sp.recording_id
-         LEFT JOIN segments s ON r.id = s.recording_id
-         WHERE r.duration >= 60
-           AND sp.name = ?
-           AND (r.title LIKE ? ESCAPE '\\' OR r.custom_title LIKE ? ESCAPE '\\' OR s.text LIKE ? ESCAPE '\\' OR s.speaker LIKE ? ESCAPE '\\')
-         ORDER BY r.created_at DESC`
-      )
-      .all(speakerName, searchTerm, searchTerm, searchTerm, searchTerm) as RecordingRow[];
+    const baseQuery = `
+      SELECT DISTINCT r.* FROM recordings r
+      LEFT JOIN segments s ON r.id = s.recording_id
+      WHERE r.duration >= 60
+        AND ${speakerFilter}
+        ${sourceFilter ? "AND r.source = ?" : ""}
+        AND (r.title LIKE ? ESCAPE '\\' OR r.custom_title LIKE ? ESCAPE '\\' OR s.text LIKE ? ESCAPE '\\' OR s.speaker LIKE ? ESCAPE '\\')
+      ORDER BY r.created_at DESC`;
+
+    const params = sourceFilter
+      ? [...speakers, speakers.length, sourceFilter, searchTerm, searchTerm, searchTerm, searchTerm]
+      : [...speakers, speakers.length, searchTerm, searchTerm, searchTerm, searchTerm];
+
+    return db.prepare(baseQuery).all(...params) as RecordingRow[];
   } else {
-    // Just filter by speaker
-    if (sourceFilter) {
-      return db
-        .prepare(
-          `SELECT DISTINCT r.* FROM recordings r
-           INNER JOIN speakers sp ON r.id = sp.recording_id
-           WHERE r.duration >= 60 AND r.source = ? AND sp.name = ?
-           ORDER BY r.created_at DESC`
-        )
-        .all(sourceFilter, speakerName) as RecordingRow[];
-    }
-    return db
-      .prepare(
-        `SELECT DISTINCT r.* FROM recordings r
-         INNER JOIN speakers sp ON r.id = sp.recording_id
-         WHERE r.duration >= 60 AND sp.name = ?
-         ORDER BY r.created_at DESC`
-      )
-      .all(speakerName) as RecordingRow[];
+    // Just filter by speaker(s)
+    const baseQuery = `
+      SELECT DISTINCT r.* FROM recordings r
+      WHERE r.duration >= 60
+        AND ${speakerFilter}
+        ${sourceFilter ? "AND r.source = ?" : ""}
+      ORDER BY r.created_at DESC`;
+
+    const params = sourceFilter
+      ? [...speakers, speakers.length, sourceFilter]
+      : [...speakers, speakers.length];
+
+    return db.prepare(baseQuery).all(...params) as RecordingRow[];
   }
 }
 
@@ -678,6 +675,20 @@ export function getSummaryByRecordingId(recordingId: string): SummaryRow | undef
   return db
     .prepare(`SELECT * FROM summaries WHERE recording_id = ?`)
     .get(recordingId) as SummaryRow | undefined;
+}
+
+export function getSummariesByRecordingIds(recordingIds: string[]): Record<string, SummaryRow> {
+  if (recordingIds.length === 0) return {};
+  const db = getDb();
+  const placeholders = recordingIds.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT * FROM summaries WHERE recording_id IN (${placeholders})`)
+    .all(...recordingIds) as SummaryRow[];
+  const result: Record<string, SummaryRow> = {};
+  for (const row of rows) {
+    result[row.recording_id] = row;
+  }
+  return result;
 }
 
 export function upsertSummary(summary: {

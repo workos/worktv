@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-type ViewType = "list" | "calendar" | "clips";
+type ViewType = "list" | "grid" | "calendar" | "clips";
 
 export function ViewToggle({ currentView }: { currentView: ViewType }) {
   const router = useRouter();
@@ -14,7 +14,10 @@ export function ViewToggle({ currentView }: { currentView: ViewType }) {
       params.set("view", "calendar");
     } else if (view === "clips") {
       params.set("view", "clips");
+    } else if (view === "list") {
+      params.set("view", "list");
     } else {
+      // Grid is the default, so remove view param
       params.delete("view");
     }
     router.push(`/recordings?${params.toString()}`);
@@ -22,6 +25,28 @@ export function ViewToggle({ currentView }: { currentView: ViewType }) {
 
   return (
     <div className="flex rounded-lg border border-white/10 bg-zinc-900/50 p-1 light:border-zinc-300 light:bg-white">
+      <button
+        onClick={() => setView("grid")}
+        className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+          currentView === "grid"
+            ? "bg-white/10 text-zinc-100 light:bg-zinc-200 light:text-zinc-900"
+            : "text-zinc-400 hover:text-zinc-200 light:text-zinc-500 light:hover:text-zinc-700"
+        }`}
+        title="Grid view"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-4 w-4"
+        >
+          <path
+            fillRule="evenodd"
+            d="M4.25 2A2.25 2.25 0 002 4.25v2.5A2.25 2.25 0 004.25 9h2.5A2.25 2.25 0 009 6.75v-2.5A2.25 2.25 0 006.75 2h-2.5zm0 9A2.25 2.25 0 002 13.25v2.5A2.25 2.25 0 004.25 18h2.5A2.25 2.25 0 009 15.75v-2.5A2.25 2.25 0 006.75 11h-2.5zm9-9A2.25 2.25 0 0011 4.25v2.5A2.25 2.25 0 0013.25 9h2.5A2.25 2.25 0 0018 6.75v-2.5A2.25 2.25 0 0015.75 2h-2.5zm0 9A2.25 2.25 0 0011 13.25v2.5A2.25 2.25 0 0013.25 18h2.5A2.25 2.25 0 0018 15.75v-2.5A2.25 2.25 0 0015.75 11h-2.5z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
       <button
         onClick={() => setView("list")}
         className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${

@@ -19,17 +19,17 @@ interface Speaker {
 
 export function SearchInput({
   defaultValue,
-  defaultSpeaker,
+  defaultSpeakers,
 }: {
   defaultValue?: string;
-  defaultSpeaker?: string;
+  defaultSpeakers?: string[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { startSearching } = useSearch();
   const [query, setQuery] = useState(defaultValue ?? "");
-  const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(
-    defaultSpeaker ?? null
+  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>(
+    defaultSpeakers ?? []
   );
   const [isPending, startTransition] = useTransition();
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
@@ -39,6 +39,14 @@ export function SearchInput({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync state with URL params when they change (e.g., clicking "Clear")
+  useEffect(() => {
+    const urlQuery = searchParams.get("q") ?? "";
+    const urlSpeakers = searchParams.getAll("speaker");
+    setQuery(urlQuery);
+    setSelectedSpeakers(urlSpeakers);
+  }, [searchParams]);
 
   // Fetch speakers on mount
   useEffect(() => {
@@ -54,12 +62,15 @@ export function SearchInput({
       });
   }, []);
 
-  // Filter speakers based on mention query
+  // Filter speakers based on mention query and exclude already selected
   const filteredSpeakers = useMemo(() => {
-    if (!mentionQuery) return speakers;
+    const availableSpeakers = speakers.filter(
+      (s) => !selectedSpeakers.includes(s.name)
+    );
+    if (!mentionQuery) return availableSpeakers;
     const lower = mentionQuery.toLowerCase();
-    return speakers.filter((s) => s.name.toLowerCase().includes(lower));
-  }, [speakers, mentionQuery]);
+    return availableSpeakers.filter((s) => s.name.toLowerCase().includes(lower));
+  }, [speakers, mentionQuery, selectedSpeakers]);
 
   // Reset highlighted index when filtered speakers change
   useEffect(() => {
@@ -110,27 +121,70 @@ export function SearchInput({
 
   const selectSpeaker = useCallback(
     (speaker: Speaker) => {
-      setSelectedSpeaker(speaker.name);
       // Remove the @mention text from query
       const cursorPos = inputRef.current?.selectionStart ?? query.length;
       const textBeforeCursor = query.slice(0, cursorPos);
       const atIndex = textBeforeCursor.lastIndexOf("@");
+      let newQuery = query;
       if (atIndex !== -1) {
-        const newQuery =
-          query.slice(0, atIndex) + query.slice(cursorPos).trimStart();
-        setQuery(newQuery.trim());
+        newQuery = (query.slice(0, atIndex) + query.slice(cursorPos).trimStart()).trim();
       }
+
+      // Add speaker to selected list
+      const newSpeakers = [...selectedSpeakers, speaker.name];
+
+      // Update local state
+      setSelectedSpeakers(newSpeakers);
+      setQuery(newQuery);
       setShowDropdown(false);
       setMentionQuery("");
-      inputRef.current?.focus();
+
+      // Navigate with new speaker filter
+      startSearching();
+      startTransition(() => {
+        const params = new URLSearchParams();
+        // Preserve view and source params
+        const view = searchParams.get("view");
+        const source = searchParams.get("source");
+        if (view) params.set("view", view);
+        if (source) params.set("source", source);
+        if (newQuery) params.set("q", newQuery);
+        // Add all speakers
+        for (const s of newSpeakers) {
+          params.append("speaker", s);
+        }
+        router.push(`/recordings?${params.toString()}`);
+      });
     },
-    [query]
+    [query, selectedSpeakers, searchParams, router, startSearching, startTransition]
   );
 
-  const removeSpeaker = useCallback(() => {
-    setSelectedSpeaker(null);
-    inputRef.current?.focus();
-  }, []);
+  const removeSpeaker = useCallback(
+    (speakerToRemove: string) => {
+      const newSpeakers = selectedSpeakers.filter((s) => s !== speakerToRemove);
+      setSelectedSpeakers(newSpeakers);
+
+      // Navigate with updated speaker filter
+      startSearching();
+      startTransition(() => {
+        const params = new URLSearchParams();
+        // Preserve view and source params
+        const view = searchParams.get("view");
+        const source = searchParams.get("source");
+        if (view) params.set("view", view);
+        if (source) params.set("source", source);
+        if (query.trim()) params.set("q", query.trim());
+        // Add remaining speakers
+        for (const s of newSpeakers) {
+          params.append("speaker", s);
+        }
+        router.push(`/recordings?${params.toString()}`);
+      });
+
+      inputRef.current?.focus();
+    },
+    [selectedSpeakers, query, searchParams, router, startSearching, startTransition]
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -164,16 +218,16 @@ export function SearchInput({
     }
     startSearching();
     startTransition(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (query.trim()) {
-        params.set("q", query.trim());
-      } else {
-        params.delete("q");
-      }
-      if (selectedSpeaker) {
-        params.set("speaker", selectedSpeaker);
-      } else {
-        params.delete("speaker");
+      const params = new URLSearchParams();
+      // Preserve view and source params
+      const view = searchParams.get("view");
+      const source = searchParams.get("source");
+      if (view) params.set("view", view);
+      if (source) params.set("source", source);
+      if (query.trim()) params.set("q", query.trim());
+      // Add all speakers
+      for (const s of selectedSpeakers) {
+        params.append("speaker", s);
       }
       router.push(`/recordings?${params.toString()}`);
     });
@@ -181,14 +235,15 @@ export function SearchInput({
 
   return (
     <form onSubmit={handleSubmit} className="relative flex-1">
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/50 px-3 py-2 transition focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 light:border-zinc-300 light:bg-white light:focus-within:border-indigo-500 light:focus-within:ring-indigo-500/30">
-        {selectedSpeaker && (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/50 px-3 py-2 transition focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 light:border-zinc-300 light:bg-white light:focus-within:border-indigo-500 light:focus-within:ring-indigo-500/30">
+        {selectedSpeakers.map((speaker) => (
           <button
+            key={speaker}
             type="button"
-            onClick={removeSpeaker}
+            onClick={() => removeSpeaker(speaker)}
             className="flex items-center gap-1 rounded-md bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/30 light:bg-indigo-100 light:text-indigo-700 light:hover:bg-indigo-200"
           >
-            <span>@{selectedSpeaker}</span>
+            <span>@{speaker}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 16 16"
@@ -198,13 +253,13 @@ export function SearchInput({
               <path d="M5.28 4.22a.75.75 0 00-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 101.06 1.06L8 9.06l2.72 2.72a.75.75 0 101.06-1.06L9.06 8l2.72-2.72a.75.75 0 00-1.06-1.06L8 6.94 5.28 4.22z" />
             </svg>
           </button>
-        )}
+        ))}
         <input
           ref={inputRef}
           type="text"
           placeholder={
-            selectedSpeaker
-              ? "Search within speaker's meetings..."
+            selectedSpeakers.length > 0
+              ? "Add more speakers or search..."
               : "Search recordings... (type @ to filter by speaker)"
           }
           value={query}

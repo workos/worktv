@@ -4,6 +4,7 @@ import {
   searchRecordingsWithContext,
   searchRecordingsWithSpeaker,
   getSpeakersByRecordingIds,
+  getSummariesByRecordingIds,
   getRecordingsPaginated,
   getRecordingsBySource,
   getAllClipsWithRecordingTitle,
@@ -19,23 +20,31 @@ import { SourceFilter } from "./source-filter";
 import { ClipsListView } from "./clips-list-view";
 import { LocalDateTime } from "@/components/local-datetime";
 import { RecordingPreview } from "./recording-preview";
+import { RecordingGridCard } from "./recording-grid-card";
 import { SearchMatchDisplay } from "./search-match-display";
 import { RecordingsInfiniteScroll } from "./recordings-infinite-scroll";
 import { SearchResultsWrapper } from "./search-results-wrapper";
 import { NavTitle } from "@/components/nav-title";
+import type { AISummary } from "@/types/video";
 
 export default async function RecordingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string; speaker?: string; source?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; speaker?: string | string[]; source?: string }>;
 }) {
   const { q, view, speaker, source } = await searchParams;
+
+  // Parse speakers (can be single string or array)
+  const speakers: string[] = Array.isArray(speaker) ? speaker : speaker ? [speaker] : [];
 
   // Parse source filter
   const sourceFilter = (source === "zoom" || source === "gong") ? source : "all";
 
   const isCalendarView = view === "calendar";
+  const isListView = view === "list";
   const isClipsView = view === "clips";
+  // Grid is the default view (when no view param or view=grid)
+  const isGridView = !isCalendarView && !isListView && !isClipsView;
 
   // If clips view, fetch clips instead of recordings
   if (isClipsView) {
@@ -59,13 +68,13 @@ export default async function RecordingsPage({
 
   // Determine which query to run based on filters
   // Use full search for queries/speaker filters, paginated for browsing
-  const isSearchMode = Boolean(q || speaker);
+  const isSearchMode = Boolean(q || speakers.length > 0);
   let recordings: SearchResultRow[] = [];
   let paginatedResult: { items: typeof recordings; hasMore: boolean; nextCursor: string | null } | null = null;
 
-  if (speaker) {
-    // Speaker search doesn't have context yet, cast to SearchResultRow
-    const results = searchRecordingsWithSpeaker(q ?? "", speaker, sourceFilter);
+  if (speakers.length > 0) {
+    // Speaker search - filter by all selected speakers (AND logic)
+    const results = searchRecordingsWithSpeaker(q ?? "", speakers, sourceFilter);
     recordings = results.map((r) => ({ ...r, match_type: "speaker" as const, match_text: null, match_time: null }));
   } else if (q) {
     recordings = searchRecordingsWithContext(q, sourceFilter);
@@ -96,14 +105,30 @@ export default async function RecordingsPage({
     recordings.map((r) => r.id)
   );
 
+  // Fetch summaries for grid view
+  const summariesByRecording = isGridView
+    ? getSummariesByRecordingIds(recordings.map((r) => r.id))
+    : {};
+
   const recordingsWithMeta = recordings.map((recording) => {
     const speakers = speakersByRecording[recording.id] ?? [];
+    const summaryRow = summariesByRecording[recording.id];
+    let summaryBrief: string | null = null;
+    if (summaryRow) {
+      try {
+        const parsed = JSON.parse(summaryRow.content) as AISummary;
+        summaryBrief = parsed.brief || null;
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
     return {
       ...recording,
       speakers,
       hasTranscript: speakers.length > 0,
       posterUrl: recording.poster_url,
       previewGifUrl: recording.preview_gif_url,
+      summaryBrief,
     };
   });
 
@@ -111,14 +136,14 @@ export default async function RecordingsPage({
     <div className="flex flex-col gap-4">
       <NavTitle>
         <h1 className="text-xl font-semibold text-zinc-50 light:text-zinc-900">
-          Recordings
+          Let's watch WorkTV
         </h1>
       </NavTitle>
       <Suspense fallback={<div className="h-10 animate-pulse rounded-xl bg-zinc-800 light:bg-zinc-200" />}>
         <div className="flex flex-wrap items-center gap-3">
-          <ViewToggle currentView={isCalendarView ? "calendar" : "list"} />
+          <ViewToggle currentView={isCalendarView ? "calendar" : isListView ? "list" : "grid"} />
           <SourceFilter currentSource={sourceFilter} />
-          <SearchInput defaultValue={q} defaultSpeaker={speaker} />
+          <SearchInput defaultValue={q} defaultSpeakers={speakers} />
         </div>
       </Suspense>
 
@@ -132,13 +157,19 @@ export default async function RecordingsPage({
         </div>
       )}
 
-      {(q || speaker) && (
+      {(q || speakers.length > 0) && (
         <div className="flex items-center gap-2 text-sm text-zinc-400 light:text-zinc-600">
           <span>
             {recordings.length} result{recordings.length !== 1 ? "s" : ""}
-            {speaker && (
+            {speakers.length > 0 && (
               <>
-                {" "}with <span className="font-medium text-indigo-400 light:text-indigo-600">@{speaker}</span>
+                {" "}with{" "}
+                {speakers.map((s, i) => (
+                  <span key={s}>
+                    {i > 0 && " & "}
+                    <span className="font-medium text-indigo-400 light:text-indigo-600">@{s}</span>
+                  </span>
+                ))}
               </>
             )}
             {q && (
@@ -170,12 +201,41 @@ export default async function RecordingsPage({
           </div>
         ) : isCalendarView ? (
           <CalendarView recordings={recordingsWithMeta} />
+        ) : isGridView ? (
+          !isSearchMode && paginatedResult ? (
+            <RecordingsInfiniteScroll
+              initialRecordings={recordingsWithMeta}
+              initialHasMore={paginatedResult.hasMore}
+              initialCursor={paginatedResult.nextCursor}
+              source={sourceFilter}
+              viewMode="grid"
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {recordingsWithMeta.map((recording) => (
+                <RecordingGridCard
+                  key={recording.id}
+                  id={recording.id}
+                  title={recording.title}
+                  customTitle={recording.custom_title}
+                  source={recording.source}
+                  duration={recording.duration}
+                  createdAt={recording.created_at}
+                  speakers={recording.speakers}
+                  posterUrl={recording.posterUrl}
+                  previewGifUrl={recording.previewGifUrl}
+                  summaryBrief={recording.summaryBrief}
+                />
+              ))}
+            </div>
+          )
         ) : !isSearchMode && paginatedResult ? (
           <RecordingsInfiniteScroll
             initialRecordings={recordingsWithMeta}
             initialHasMore={paginatedResult.hasMore}
             initialCursor={paginatedResult.nextCursor}
             source={sourceFilter}
+            viewMode="list"
           />
         ) : (
           <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-2 light:border-zinc-200 light:bg-white">

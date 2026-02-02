@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSearch } from "./search-context";
 
 interface SearchResultsWrapperProps {
@@ -9,11 +10,13 @@ interface SearchResultsWrapperProps {
 
 export function SearchResultsWrapper({ children }: SearchResultsWrapperProps) {
   const { isSearching, stopSearching } = useSearch();
+  const searchParams = useSearchParams();
 
-  // Stop the searching state when this component mounts (server render completed)
+  // Stop the searching state when URL changes (navigation completed)
+  // Using searchParams.toString() ensures effect runs on any URL change
   useEffect(() => {
     stopSearching();
-  }, [stopSearching]);
+  }, [stopSearching, searchParams]);
 
   if (isSearching) {
     return (

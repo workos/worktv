@@ -137,6 +137,24 @@ export function SearchInput({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Global "/" hotkey to focus search
+  const [isFocused, setIsFocused] = useState(false);
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't trigger if already typing in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+      if (e.key === "/") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
@@ -373,31 +391,20 @@ export function SearchInput({
           placeholder={
             hasFilter
               ? "Add more filters or search..."
-              : "Search recordings... (type @ to filter by speaker or participant)"
+              : "Search recordings... (type @ to filter by speaker)"
           }
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           className="min-w-0 flex-1 bg-transparent text-sm text-zinc-100 placeholder-zinc-500 outline-none light:text-zinc-900 light:placeholder-zinc-400"
         />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="shrink-0 rounded p-1 text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50 light:text-zinc-500 light:hover:text-zinc-700"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="h-5 w-5"
-          >
-            <path
-              fillRule="evenodd"
-              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
+        {!isFocused && !query && !hasFilter && (
+          <kbd className="hidden shrink-0 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-zinc-400 sm:inline-block light:border-zinc-300 light:bg-zinc-100 light:text-zinc-500">
+            /
+          </kbd>
+        )}
       </div>
 
       {/* Autocomplete dropdown */}

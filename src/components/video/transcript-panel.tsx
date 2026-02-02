@@ -20,6 +20,7 @@ export function TranscriptPanel({
   const segmentRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const hasScrolledInitially = useRef(false);
   const currentSegment = findCurrentSegment(segments, currentTime);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,10 +33,6 @@ export function TranscriptPanel({
     return segments.filter(seg => seg.text.toLowerCase().includes(query));
   }, [segments, searchQuery]);
 
-  const matchingSegmentIds = useMemo(() =>
-    new Set(matchingSegments.map(seg => seg.id)),
-    [matchingSegments]
-  );
 
   const setSegmentRef = useCallback(
     (id: string) => (el: HTMLButtonElement | null) => {
@@ -57,19 +54,13 @@ export function TranscriptPanel({
   useEffect(() => {
     if (matchingSegments.length > 0 && searchQuery.trim()) {
       const matchedSegment = matchingSegments[currentMatchIndex];
-      if (matchedSegment && segmentRefs.current.has(matchedSegment.id) && containerRef.current) {
+      if (matchedSegment && segmentRefs.current.has(matchedSegment.id)) {
         const element = segmentRefs.current.get(matchedSegment.id);
-        const container = containerRef.current;
         if (!element) return;
 
-        const elementTop = element.offsetTop;
-        const elementHeight = element.offsetHeight;
-        const containerHeight = container.clientHeight;
-        const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2);
-
-        container.scrollTo({
-          top: Math.max(0, scrollTarget),
+        element.scrollIntoView({
           behavior: "smooth",
+          block: "center",
         });
       }
     }
@@ -79,19 +70,17 @@ export function TranscriptPanel({
   useEffect(() => {
     if (searchQuery.trim()) return; // Don't auto-scroll during search
 
-    if (currentSegment && segmentRefs.current.has(currentSegment.id) && containerRef.current) {
+    if (currentSegment && segmentRefs.current.has(currentSegment.id)) {
       const element = segmentRefs.current.get(currentSegment.id);
-      const container = containerRef.current;
       if (!element) return;
 
-      const elementTop = element.offsetTop;
-      const elementHeight = element.offsetHeight;
-      const containerHeight = container.clientHeight;
-      const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2);
+      // Use instant scroll on first render, smooth scroll afterwards
+      const behavior = hasScrolledInitially.current ? "smooth" : "instant";
+      hasScrolledInitially.current = true;
 
-      container.scrollTo({
-        top: Math.max(0, scrollTarget),
-        behavior: "smooth",
+      element.scrollIntoView({
+        behavior,
+        block: "center",
       });
     }
   }, [currentSegment, searchQuery]);

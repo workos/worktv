@@ -7,10 +7,11 @@ interface SummaryPanelProps {
   summary: AISummary | null;
   recordingId: string;
   hasTranscript: boolean;
+  onToggleVisibility?: () => void;
+  embedded?: boolean;
 }
 
-export function SummaryPanel({ summary, recordingId, hasTranscript }: SummaryPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export function SummaryPanel({ summary, recordingId, hasTranscript, onToggleVisibility, embedded = false }: SummaryPanelProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentSummary, setCurrentSummary] = useState(summary);
   const [error, setError] = useState<string | null>(null);
@@ -73,11 +74,152 @@ export function SummaryPanel({ summary, recordingId, hasTranscript }: SummaryPan
 
   // Show loading state while generating
   if (isGenerating && !currentSummary) {
+    const loadingContent = (
+      <div className="flex items-center gap-3">
+        <svg className="h-4 w-4 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span className="text-sm text-zinc-400">Generating AI summary...</span>
+      </div>
+    );
+
+    if (embedded) {
+      return loadingContent;
+    }
+
     return (
-      <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 light:border-zinc-200 light:bg-white">
-        <div className="flex items-center gap-3">
+      <div className="rounded-2xl border border-white/10 bg-zinc-900/50 light:border-zinc-200 light:bg-white">
+        {onToggleVisibility ? (
+          <button
+            onClick={onToggleVisibility}
+            className="flex w-full items-center justify-between p-4 text-left transition-colors duration-150 hover:bg-white/5 light:hover:bg-zinc-50"
+            title="Hide Summary"
+          >
+            {loadingContent}
+            <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        ) : (
+          <div className="p-4">{loadingContent}</div>
+        )}
+      </div>
+    );
+  }
+
+  // Show error with retry button
+  if (error && !currentSummary) {
+    const errorContent = (
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex-1 text-sm text-red-400">{error}</span>
+        <button
+          onClick={generateSummary}
+          className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs text-red-400 transition hover:bg-red-500/30"
+        >
+          Retry
+        </button>
+      </div>
+    );
+
+    if (embedded) {
+      return errorContent;
+    }
+
+    return (
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/10">
+        {onToggleVisibility ? (
+          <button
+            onClick={onToggleVisibility}
+            className="flex w-full items-center justify-between p-4 pb-2 text-left transition-colors duration-150 hover:bg-red-500/10"
+            title="Hide Summary"
+          >
+            <span className="text-sm font-medium text-red-400">AI Summary</span>
+            <svg className="h-4 w-4 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        ) : (
+          <div className="p-4 pb-2">
+            <span className="text-sm font-medium text-red-400">AI Summary</span>
+          </div>
+        )}
+        <div className="px-4 pb-4">{errorContent}</div>
+      </div>
+    );
+  }
+
+  if (!currentSummary) {
+    return null;
+  }
+
+  const summaryContent = (
+    <>
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* Brief */}
+      <p className="text-sm leading-relaxed text-zinc-300 light:text-zinc-600">
+        {currentSummary.brief}
+      </p>
+
+      {/* Key Points */}
+      {currentSummary.keyPoints.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Key Points
+          </h4>
+          <ul className="mt-2 space-y-1">
+            {currentSummary.keyPoints.map((point, i) => (
+              <li
+                key={i}
+                className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
+              >
+                <span className="text-zinc-500">•</span>
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Next Steps */}
+      {currentSummary.nextSteps.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Next Steps
+          </h4>
+          <ul className="mt-2 space-y-1">
+            {currentSummary.nextSteps.map((step, i) => {
+              // Handle both string and object formats
+              const text = typeof step === "string"
+                ? step
+                : (step as { action?: string; owner?: string }).action || JSON.stringify(step);
+              return (
+                <li
+                  key={i}
+                  className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
+                >
+                  <span className="text-indigo-400">→</span>
+                  <span>{text}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Regenerate button */}
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={generateSummary}
+          disabled={isGenerating}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+        >
           <svg
-            className="h-4 w-4 animate-spin text-indigo-400"
+            className={`h-3 w-3 ${isGenerating ? "animate-spin" : ""}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -89,40 +231,48 @@ export function SummaryPanel({ summary, recordingId, hasTranscript }: SummaryPan
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          <span className="text-sm text-zinc-400">Generating AI summary...</span>
-        </div>
+          {isGenerating ? "Regenerating..." : "Regenerate"}
+        </button>
       </div>
-    );
-  }
+    </>
+  );
 
-  // Show error with retry button
-  if (error && !currentSummary) {
-    return (
-      <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-red-400">{error}</span>
-          <button
-            onClick={generateSummary}
-            className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs text-red-400 transition hover:bg-red-500/30"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentSummary) {
-    return null;
+  if (embedded) {
+    return summaryContent;
   }
 
   return (
     <div className="rounded-2xl border border-white/10 bg-zinc-900/50 light:border-zinc-200 light:bg-white">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center justify-between p-4 text-left"
-      >
-        <div className="flex items-center gap-2">
+      {onToggleVisibility ? (
+        <button
+          onClick={onToggleVisibility}
+          className="flex w-full items-center justify-between rounded-t-2xl border-b border-white/10 px-4 py-3 text-left transition-colors duration-150 hover:bg-white/5 light:border-zinc-200 light:hover:bg-zinc-50"
+          title="Hide Summary"
+        >
+          <div className="flex items-center gap-2">
+            <svg
+              className="h-4 w-4 text-indigo-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+              />
+            </svg>
+            <span className="text-sm font-medium text-zinc-200 light:text-zinc-700">
+              AI Summary
+            </span>
+          </div>
+          <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 light:border-zinc-200">
           <svg
             className="h-4 w-4 text-indigo-400"
             fill="none"
@@ -140,107 +290,9 @@ export function SummaryPanel({ summary, recordingId, hasTranscript }: SummaryPan
             AI Summary
           </span>
         </div>
-        <svg
-          className={`h-4 w-4 text-zinc-400 transition-transform ${
-            isExpanded ? "rotate-180" : ""
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
-
-      {isExpanded && (
-        <div className="border-t border-white/10 p-4 light:border-zinc-200">
-          {error && (
-            <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
-              {error}
-            </div>
-          )}
-
-          {/* Brief */}
-          <p className="text-sm leading-relaxed text-zinc-300 light:text-zinc-600">
-            {currentSummary.brief}
-          </p>
-
-          {/* Key Points */}
-          {currentSummary.keyPoints.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Key Points
-              </h4>
-              <ul className="mt-2 space-y-1">
-                {currentSummary.keyPoints.map((point, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
-                  >
-                    <span className="text-zinc-500">•</span>
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Next Steps */}
-          {currentSummary.nextSteps.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Next Steps
-              </h4>
-              <ul className="mt-2 space-y-1">
-                {currentSummary.nextSteps.map((step, i) => {
-                  // Handle both string and object formats
-                  const text = typeof step === "string"
-                    ? step
-                    : (step as { action?: string; owner?: string }).action || JSON.stringify(step);
-                  return (
-                    <li
-                      key={i}
-                      className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
-                    >
-                      <span className="text-indigo-400">→</span>
-                      <span>{text}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {/* Regenerate button */}
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={generateSummary}
-              disabled={isGenerating}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50 light:hover:bg-zinc-100 light:hover:text-zinc-700"
-            >
-              <svg
-                className={`h-3 w-3 ${isGenerating ? "animate-spin" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              {isGenerating ? "Regenerating..." : "Regenerate"}
-            </button>
-          </div>
-        </div>
       )}
+
+      <div className="p-4 pt-3">{summaryContent}</div>
     </div>
   );
 }

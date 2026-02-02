@@ -8,7 +8,6 @@ import { VideoPlayer } from "@/components/video/video-player";
 import { AudioPlayer } from "@/components/video/audio-player";
 import { VideoControls } from "@/components/video/video-controls";
 import { TranscriptPanel } from "@/components/video/transcript-panel";
-import { ChatPanel } from "@/components/video/chat-panel";
 import { SpeakerTimeline } from "@/components/video/speaker-timeline";
 import { SummaryPanel } from "@/components/summary/summary-panel";
 import { CaptionOverlay } from "@/components/video/caption-overlay";
@@ -31,15 +30,15 @@ interface RecordingPlayerProps {
   clips?: Clip[];
 }
 
-type PanelTab = "transcript" | "chat";
+type LeftPanelTab = "summary" | "transcript";
 
 export function RecordingPlayer({ recording, videoViews = [], summary, activeClip, clips = [] }: RecordingPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentViewIndex, setCurrentViewIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<PanelTab>("transcript");
+  const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>("summary");
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
-  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [isCreatingClip, setIsCreatingClip] = useState(false);
   const [localClips, setLocalClips] = useState<Clip[]>(clips);
   const [createdClipUrl, setCreatedClipUrl] = useState<string | null>(null);
@@ -47,7 +46,6 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
   const isAudioOnly = recording.mediaType === "audio";
   const mediaRef = isAudioOnly ? audioRef : videoRef;
 
-  const hasChatMessages = (recording.chatMessages?.length ?? 0) > 0;
   const hasTranscript = recording.transcript.length > 0;
 
   // Toggle captions
@@ -143,20 +141,96 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
   }, []);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      {/* Left column - AI Summary */}
+    <div className="flex gap-6">
+      {/* Left column - AI Summary / Transcript tabs */}
       {hasTranscript && (
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <SummaryPanel
-            summary={summary}
-            recordingId={recording.id}
-            hasTranscript={hasTranscript}
-          />
+        <div
+          className={`shrink-0 transition-all duration-150 ease-out ${
+            showLeftPanel
+              ? "w-full opacity-100 lg:w-[calc(50%-12px)]"
+              : "w-0 overflow-hidden opacity-0"
+          }`}
+        >
+          <div className="rounded-2xl border border-white/10 bg-zinc-900/50 light:border-zinc-200 light:bg-white">
+            {/* Tab header */}
+            <div className="flex items-center justify-between border-b border-white/10 light:border-zinc-200">
+              <div className="flex">
+                <button
+                  onClick={() => setLeftPanelTab("summary")}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    leftPanelTab === "summary"
+                      ? "border-b-2 border-indigo-400 text-zinc-200 light:text-zinc-900"
+                      : "text-zinc-500 hover:text-zinc-300 light:hover:text-zinc-700"
+                  }`}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  AI Summary
+                </button>
+                <button
+                  onClick={() => setLeftPanelTab("transcript")}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    leftPanelTab === "transcript"
+                      ? "border-b-2 border-indigo-400 text-zinc-200 light:text-zinc-900"
+                      : "text-zinc-500 hover:text-zinc-300 light:hover:text-zinc-700"
+                  }`}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Transcript
+                </button>
+              </div>
+              <button
+                onClick={() => setShowLeftPanel(false)}
+                className="mr-2 flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800 hover:text-zinc-300 light:hover:bg-zinc-100 light:hover:text-zinc-600"
+                title="Hide Panel"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Tab content */}
+            <div className="p-4">
+              {leftPanelTab === "summary" ? (
+                <SummaryPanel
+                  summary={summary}
+                  recordingId={recording.id}
+                  hasTranscript={hasTranscript}
+                  embedded
+                />
+              ) : (
+                <TranscriptPanel
+                  segments={recording.transcript}
+                  currentTime={state.currentTime}
+                  onSeek={seekAndPlay}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Right column - Video/Audio + Controls + Transcript */}
-      <div className="flex flex-col gap-4">
+      {/* Right column - Video/Audio + Controls */}
+      <div className={`flex min-w-0 flex-col gap-4 transition-all duration-150 lg:sticky lg:top-6 lg:self-start ${
+        showLeftPanel || !hasTranscript ? "flex-1" : "mx-auto w-full lg:w-[75%]"
+      }`}>
+        {/* Show panel button when hidden */}
+        {hasTranscript && !showLeftPanel && (
+          <button
+            onClick={() => setShowLeftPanel(true)}
+            className="flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-zinc-800/80 px-3 py-1.5 text-sm text-zinc-400 transition-all duration-150 hover:bg-zinc-700/80 hover:text-zinc-200 light:border-zinc-200 light:bg-white/80 light:text-zinc-500 light:hover:bg-zinc-100/80 light:hover:text-zinc-700"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            {leftPanelTab === "summary" ? "AI Summary" : "Transcript"}
+          </button>
+        )}
+
         {/* Media section */}
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 light:border-zinc-200 light:bg-white">
           <div className={`relative w-full overflow-hidden rounded-xl border border-white/10 bg-black light:border-zinc-300 ${isAudioOnly ? "aspect-[3/1]" : "aspect-video"}`}>
@@ -280,98 +354,6 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
                 setLocalClips((prev) => prev.filter((c) => c.id !== clipId));
               }}
             />
-          </section>
-        )}
-
-        {/* Transcript/Chat panel - collapsible */}
-        {hasTranscript && (
-          <section className="rounded-2xl border border-white/10 bg-zinc-900/50 light:border-zinc-200 light:bg-white">
-            {/* Collapsible header */}
-            <button
-              onClick={() => setIsTranscriptExpanded(!isTranscriptExpanded)}
-              className="flex w-full items-center justify-between p-4 text-left"
-            >
-              <div className="flex items-center gap-2">
-                <svg
-                  className="h-4 w-4 text-zinc-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <span className="text-sm font-medium text-zinc-200 light:text-zinc-700">
-                  Transcript
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {recording.transcript.length} segments
-                </span>
-              </div>
-              <svg
-                className={`h-4 w-4 text-zinc-400 transition-transform ${
-                  isTranscriptExpanded ? "rotate-180" : ""
-                }`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </button>
-
-            {isTranscriptExpanded && (
-              <div className="border-t border-white/10 p-4 light:border-zinc-200">
-                {/* Tab switcher if chat messages exist */}
-                {hasChatMessages && (
-                  <div className="mb-4 flex gap-1 rounded-lg border border-white/10 bg-black/20 p-1 light:border-zinc-200 light:bg-zinc-100">
-                    <button
-                      onClick={() => setActiveTab("transcript")}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                        activeTab === "transcript"
-                          ? "bg-white/15 text-zinc-100 light:bg-white light:text-zinc-900"
-                          : "text-zinc-400 hover:text-zinc-200 light:text-zinc-600 light:hover:text-zinc-900"
-                      }`}
-                    >
-                      Transcript
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("chat")}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                        activeTab === "chat"
-                          ? "bg-white/15 text-zinc-100 light:bg-white light:text-zinc-900"
-                          : "text-zinc-400 hover:text-zinc-200 light:text-zinc-600 light:hover:text-zinc-900"
-                      }`}
-                    >
-                      Chat ({recording.chatMessages?.length})
-                    </button>
-                  </div>
-                )}
-
-                {activeTab === "transcript" ? (
-                  <TranscriptPanel
-                    segments={recording.transcript}
-                    currentTime={state.currentTime}
-                    onSeek={seekAndPlay}
-                  />
-                ) : (
-                  <ChatPanel
-                    messages={recording.chatMessages ?? []}
-                    currentTime={state.currentTime}
-                    onSeek={seekAndPlay}
-                  />
-                )}
-              </div>
-            )}
           </section>
         )}
       </div>

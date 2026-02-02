@@ -86,9 +86,6 @@ export default async function RecordingsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-center text-2xl font-bold text-zinc-50 light:text-zinc-900">
-        Let&apos;s watch WorkTV
-      </h1>
       <Suspense fallback={<div className="h-10 animate-pulse rounded-xl bg-zinc-800 light:bg-zinc-200" />}>
         <div className="flex flex-wrap items-center gap-3">
           <ViewToggle currentView={isCalendarView ? "calendar" : "list"} />

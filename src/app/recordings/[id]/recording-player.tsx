@@ -14,6 +14,7 @@ import { SummaryPanel } from "@/components/summary/summary-panel";
 import { CaptionOverlay } from "@/components/video/caption-overlay";
 import { ClipCreator } from "@/components/video/clip-creator";
 import { ClipsPanel } from "@/components/video/clips-panel";
+import { ClipSuccessModal } from "@/components/video/clip-success-modal";
 import type { AISummary } from "@/types/video";
 
 interface VideoView {
@@ -41,6 +42,7 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
   const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
   const [isCreatingClip, setIsCreatingClip] = useState(false);
   const [localClips, setLocalClips] = useState<Clip[]>(clips);
+  const [createdClipUrl, setCreatedClipUrl] = useState<string | null>(null);
 
   const isAudioOnly = recording.mediaType === "audio";
   const mediaRef = isAudioOnly ? audioRef : videoRef;
@@ -81,6 +83,7 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
   const {
     state,
     play,
+    pause,
     togglePlay,
     seek,
     seekRelative,
@@ -104,15 +107,17 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
     setVolume(Math.max(0, state.volume - 0.1));
   }, [setVolume, state.volume]);
 
+  // Disable keyboard shortcuts when clip creator modal is open
+  const noop = useCallback(() => {}, []);
   useKeyboardShortcuts({
-    onTogglePlay: togglePlay,
-    onSeekBack: () => seekRelative(-5),
-    onSeekForward: () => seekRelative(5),
-    onVolumeUp: handleVolumeUp,
-    onVolumeDown: handleVolumeDown,
-    onToggleMute: toggleMute,
-    onToggleFullscreen: isAudioOnly ? undefined : toggleFullscreen,
-    onToggleCaptions: hasTranscript && !isAudioOnly ? toggleCaptions : undefined,
+    onTogglePlay: isCreatingClip ? noop : togglePlay,
+    onSeekBack: isCreatingClip ? noop : () => seekRelative(-5),
+    onSeekForward: isCreatingClip ? noop : () => seekRelative(5),
+    onVolumeUp: isCreatingClip ? noop : handleVolumeUp,
+    onVolumeDown: isCreatingClip ? noop : handleVolumeDown,
+    onToggleMute: isCreatingClip ? noop : toggleMute,
+    onToggleFullscreen: isCreatingClip || isAudioOnly ? undefined : toggleFullscreen,
+    onToggleCaptions: isCreatingClip || !hasTranscript || isAudioOnly ? undefined : toggleCaptions,
   });
 
   // Handle view switching while preserving playback position
@@ -198,7 +203,10 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
             onPlaybackRateChange={setPlaybackRate}
             onToggleFullscreen={isAudioOnly ? undefined : toggleFullscreen}
             onToggleCaptions={isAudioOnly ? undefined : toggleCaptions}
-            onCreateClip={() => setIsCreatingClip(true)}
+            onCreateClip={() => {
+              pause();
+              setIsCreatingClip(true);
+            }}
           />
 
           {isCreatingClip && (
@@ -211,7 +219,17 @@ export function RecordingPlayer({ recording, videoViews = [], summary, activeCli
               onClose={() => setIsCreatingClip(false)}
               onClipCreated={(clip) => {
                 setLocalClips((prev) => [...prev, clip as Clip]);
+                setIsCreatingClip(false);
+                const clipUrl = `${window.location.origin}/c/${clip.id}`;
+                setCreatedClipUrl(clipUrl);
               }}
+            />
+          )}
+
+          {createdClipUrl && (
+            <ClipSuccessModal
+              clipUrl={createdClipUrl}
+              onClose={() => setCreatedClipUrl(null)}
             />
           )}
 

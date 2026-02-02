@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Clip } from "@/types/video";
 import { formatTime } from "@/types/video";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 interface ClipsPanelProps {
   clips: Clip[];
@@ -14,6 +15,7 @@ interface ClipsPanelProps {
 export function ClipsPanel({ clips, activeClipId, onClipSelect, onClipDelete }: ClipsPanelProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clipToDelete, setClipToDelete] = useState<Clip | null>(null);
 
   const handleCopyLink = async (clip: Clip) => {
     const url = `${window.location.origin}/c/${clip.id}`;
@@ -22,10 +24,12 @@ export function ClipsPanel({ clips, activeClipId, onClipSelect, onClipDelete }: 
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDelete = async (clipId: string) => {
-    if (!confirm("Delete this clip?")) return;
+  const handleDeleteConfirm = async () => {
+    if (!clipToDelete) return;
 
+    const clipId = clipToDelete.id;
     setDeletingId(clipId);
+    setClipToDelete(null);
     try {
       const response = await fetch(`/api/clips/${clipId}`, { method: "DELETE" });
       if (response.ok) {
@@ -45,8 +49,20 @@ export function ClipsPanel({ clips, activeClipId, onClipSelect, onClipDelete }: 
   }
 
   return (
-    <div className="space-y-2">
-      {clips.map((clip) => {
+    <>
+      {clipToDelete && (
+        <ConfirmModal
+          title="Delete Clip"
+          message={`Are you sure you want to delete "${clipToDelete.title || "Untitled Clip"}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          isDestructive
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setClipToDelete(null)}
+        />
+      )}
+      <div className="space-y-2">
+        {clips.map((clip) => {
         const isActive = activeClipId === clip.id;
         const isCopied = copiedId === clip.id;
         const isDeleting = deletingId === clip.id;
@@ -93,7 +109,7 @@ export function ClipsPanel({ clips, activeClipId, onClipSelect, onClipDelete }: 
                   )}
                 </button>
                 <button
-                  onClick={() => handleDelete(clip.id)}
+                  onClick={() => setClipToDelete(clip)}
                   disabled={isDeleting}
                   className="rounded p-1.5 text-zinc-400 transition hover:bg-red-500/20 hover:text-red-400 disabled:opacity-50"
                   title="Delete clip"
@@ -107,6 +123,7 @@ export function ClipsPanel({ clips, activeClipId, onClipSelect, onClipDelete }: 
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 }

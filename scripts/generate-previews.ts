@@ -33,6 +33,9 @@ const timingStats = {
   gifExtraction: [] as number[],
   aiSelection: [] as number[],
   total: [] as number[],
+  timeouts: 0,
+  retriesAttempted: 0,
+  retriesSucceeded: 0,
 };
 
 // Format milliseconds to human-readable string
@@ -228,11 +231,23 @@ async function getGongRecordingUrl(callId: string): Promise<string | null> {
 // Both Zoom and Gong S3 URLs support Range requests, so ffmpeg can seek directly
 const DEBUG_FFMPEG = process.argv.includes("--debug");
 
-async function extractGif(
-  videoUrl: string,
-  startTime: number,
-  outputPath: string
-): Promise<boolean> {
+interface ExtractGifOptions {
+  videoUrl: string;
+  startTime: number;
+  outputPath: string;
+  // Logging context
+  recordingTitle: string;
+  candidateNum: number;
+  attemptNum: number;
+  maxAttempts: number;
+}
+
+async function extractGif(opts: ExtractGifOptions): Promise<boolean> {
+  const { videoUrl, startTime, outputPath, recordingTitle, candidateNum, attemptNum, maxAttempts } = opts;
+  const timestampStr = `${Math.floor(startTime/60)}:${(startTime%60).toString().padStart(2, "0")}`;
+  const logPrefix = `      [${recordingTitle.slice(0, 30)}] Candidate ${candidateNum} @ ${timestampStr}`;
+  const attemptInfo = attemptNum > 1 ? ` (attempt ${attemptNum}/${maxAttempts})` : "";
+
   return new Promise((resolve) => {
     const ffmpegStart = Date.now();
 
@@ -288,20 +303,30 @@ async function extractGif(
         }
         resolve(true);
       } else {
-        console.log(`     ffmpeg failed (${elapsed}ms): ${stderr.slice(-200)}`);
+        const willRetry = attemptNum < maxAttempts;
+        const retryMsg = willRetry ? " → will retry" : "";
+        console.log(`      ✗ FAILED${attemptInfo}: ${logPrefix} (${formatDuration(elapsed)}, exit=${code})${retryMsg}`);
+        if (DEBUG_FFMPEG && stderr) {
+          console.log(`        [DEBUG] stderr: ${stderr.slice(-300)}`);
+        }
         resolve(false);
       }
     });
 
     ffmpeg.on("error", (err) => {
-      console.log(`     ffmpeg error: ${err.message}`);
+      const willRetry = attemptNum < maxAttempts;
+      const retryMsg = willRetry ? " → will retry" : "";
+      console.log(`      ✗ ERROR${attemptInfo}: ${logPrefix}: ${err.message}${retryMsg}`);
       resolve(false);
     });
 
     // Timeout - use SIGKILL for forceful termination (SIGTERM may not work if blocked on I/O)
     setTimeout(() => {
       const elapsed = Date.now() - ffmpegStart;
-      console.log(`     ffmpeg timeout after ${elapsed}ms`);
+      timingStats.timeouts++;
+      const willRetry = attemptNum < maxAttempts;
+      const retryMsg = willRetry ? " → will retry" : " → NO MORE RETRIES";
+      console.log(`      ⏱ TIMEOUT${attemptInfo}: ${logPrefix} after ${formatDuration(elapsed)}${retryMsg}`);
       ffmpeg.kill("SIGKILL");
       // Clean up partial output file if it exists
       if (existsSync(outputPath)) {
@@ -448,9 +473,11 @@ async function processRecording(
       async (timestamp, i) => {
         const outputPath = join(tempDir, `candidate_${i}.gif`);
         const gifStart = Date.now();
+        const maxAttempts = MAX_RETRIES + 1;
+        const timestampStr = `${Math.floor(timestamp/60)}:${(timestamp%60).toString().padStart(2, "0")}`;
 
         // Retry loop for failed extractions
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           let urlToUse = videoSource;
 
           // For Gong, fetch fresh URL for each extraction (and retry)
@@ -464,23 +491,35 @@ async function processRecording(
             urlToUse = freshUrl;
           }
 
-          const success = await extractGif(urlToUse, timestamp, outputPath);
+          // Track retry attempts
+          if (attempt > 1) {
+            timingStats.retriesAttempted++;
+            console.log(`      ↻ Retrying candidate ${i + 1} @ ${timestampStr} (attempt ${attempt}/${maxAttempts})...`);
+          }
+
+          const success = await extractGif({
+            videoUrl: urlToUse,
+            startTime: timestamp,
+            outputPath,
+            recordingTitle: recording.title,
+            candidateNum: i + 1,
+            attemptNum: attempt,
+            maxAttempts,
+          });
 
           if (success) {
             const gifElapsed = Date.now() - gifStart;
-            const retryNote = attempt > 0 ? ` (retry ${attempt})` : "";
-            console.log(`      ✓ Candidate ${i + 1} @ ${Math.floor(timestamp/60)}:${(timestamp%60).toString().padStart(2, "0")} (${formatDuration(gifElapsed)})${retryNote}`);
+            const retryNote = attempt > 1 ? ` (succeeded on attempt ${attempt})` : "";
+            if (attempt > 1) {
+              timingStats.retriesSucceeded++;
+            }
+            console.log(`      ✓ Candidate ${i + 1} @ ${timestampStr} (${formatDuration(gifElapsed)})${retryNote}`);
             return outputPath;
-          }
-
-          // Log retry attempt
-          if (attempt < MAX_RETRIES) {
-            console.log(`      ↻ Candidate ${i + 1} retrying (attempt ${attempt + 2}/${MAX_RETRIES + 1})...`);
           }
         }
 
         const gifElapsed = Date.now() - gifStart;
-        console.log(`      ✗ Candidate ${i + 1} failed after ${MAX_RETRIES + 1} attempts (${formatDuration(gifElapsed)})`);
+        console.log(`      ✗ Candidate ${i + 1} @ ${timestampStr} GAVE UP after ${maxAttempts} attempts (${formatDuration(gifElapsed)})`);
         return null;
       },
       parallelGifs
@@ -668,6 +707,18 @@ async function main(): Promise<void> {
       const gifPct = (sum(timingStats.gifExtraction) / totalTime * 100).toFixed(1);
       const aiPct = (sum(timingStats.aiSelection) / totalTime * 100).toFixed(1);
       console.log(`\n   Time breakdown: URL ${urlPct}% | GIF ${gifPct}% | AI ${aiPct}%`);
+    }
+
+    // Timeout/retry statistics
+    if (timingStats.timeouts > 0 || timingStats.retriesAttempted > 0) {
+      console.log(`\n⏱ Timeout/Retry Statistics:`);
+      console.log(`   Timeouts: ${timingStats.timeouts}`);
+      console.log(`   Retries attempted: ${timingStats.retriesAttempted}`);
+      console.log(`   Retries succeeded: ${timingStats.retriesSucceeded}`);
+      if (timingStats.retriesAttempted > 0) {
+        const retrySuccessRate = ((timingStats.retriesSucceeded / timingStats.retriesAttempted) * 100).toFixed(1);
+        console.log(`   Retry success rate: ${retrySuccessRate}%`);
+      }
     }
   }
 

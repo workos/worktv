@@ -197,15 +197,21 @@ export function SummaryPanel({ summary, recordingId, hasTranscript }: SummaryPan
                 Next Steps
               </h4>
               <ul className="mt-2 space-y-1">
-                {currentSummary.nextSteps.map((step, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
-                  >
-                    <span className="text-indigo-400">→</span>
-                    <span>{step}</span>
-                  </li>
-                ))}
+                {currentSummary.nextSteps.map((step, i) => {
+                  // Handle both string and object formats
+                  const text = typeof step === "string"
+                    ? step
+                    : (step as { action?: string; owner?: string }).action || JSON.stringify(step);
+                  return (
+                    <li
+                      key={i}
+                      className="flex gap-2 text-sm text-zinc-300 light:text-zinc-600"
+                    >
+                      <span className="text-indigo-400">→</span>
+                      <span>{text}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

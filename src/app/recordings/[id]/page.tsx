@@ -15,7 +15,7 @@ import { getRecording } from "@/data/mock-recordings";
 import { getZoomAccessToken } from "@/lib/zoom/auth";
 import { RecordingPlayer } from "./recording-player";
 import { LocalDateTime } from "@/components/local-datetime";
-import { SummaryPanel } from "@/components/summary/summary-panel";
+import { NavTitle } from "@/components/nav-title";
 import type { AISummary } from "@/types/video";
 
 const VIEW_TYPE_LABELS: Record<string, string> = {
@@ -147,20 +147,35 @@ function RecordingPageContent({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <header className="rounded-2xl border border-white/10 bg-zinc-900/50 p-6 light:border-zinc-200 light:bg-white">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold">
+      <NavTitle>
+        <div className="text-center">
+          <h1 className="truncate text-lg font-semibold">
             {recording.title}
           </h1>
-          {recording.description && (
-            <p className="mt-2 text-sm leading-relaxed text-zinc-300 light:text-zinc-600">{recording.description}</p>
-          )}
+          <p className="text-xs text-zinc-400 light:text-zinc-500">
+            <LocalDateTime
+              iso={recording.createdAt}
+              options={{
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              }}
+            />
+            {" · "}
+            <LocalDateTime
+              iso={recording.createdAt}
+              options={{
+                hour: "numeric",
+                minute: "2-digit",
+                timeZoneName: "short",
+              }}
+            />
+          </p>
         </div>
-      </header>
+      </NavTitle>
 
-      <SummaryPanel summary={summary} recordingId={recording.id} hasTranscript={recording.transcript.length > 0} />
-
-      <RecordingPlayer recording={recording} videoViews={videoViews} />
+      <RecordingPlayer recording={recording} videoViews={videoViews} summary={summary} />
 
       {relatedRecordings.length > 0 && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 light:border-zinc-200 light:bg-white">

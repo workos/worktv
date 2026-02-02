@@ -17,7 +17,7 @@ const DEFAULT_OPTIONS: Intl.DateTimeFormatOptions = {
 
 export function LocalDateTime({ iso, options }: LocalDateTimeProps) {
   const formatter = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { ...DEFAULT_OPTIONS, ...options }),
+    () => new Intl.DateTimeFormat(undefined, options ?? DEFAULT_OPTIONS),
     [options]
   );
 

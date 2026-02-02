@@ -21,7 +21,7 @@ const SUMMARY_PROMPT = `Summarize this meeting transcript.
 
 1. BRIEF: Write a 1-2 sentence summary of what this meeting was about and who participated.
 
-2. KEY POINTS: List up to 10 key points discussed (as bullets). Be specific and concrete - avoid vague phrases.
+2. KEY POINTS: List up to 10 key points discussed. Be specific and concrete - avoid vague phrases.
 
 3. NEXT STEPS: List any action items, follow-ups, or commitments made. Include who is responsible if mentioned. If none, return empty array.
 
@@ -30,7 +30,8 @@ Meeting transcript:
 {transcript}
 ---
 
-Return JSON only, no other text: {"brief": "...", "keyPoints": [...], "nextSteps": [...]}`;
+Return JSON only: {"brief": "string", "keyPoints": ["string", ...], "nextSteps": ["string", ...]}
+All values must be strings. Do not use objects.`;
 
 export async function generateTranscriptSummary(
   segments: TranscriptSegment[]
@@ -86,7 +87,21 @@ export async function generateTranscriptSummary(
     throw new Error("Invalid summary response format");
   }
 
-  return parsed;
+  // Normalize: ensure all array items are strings
+  const normalizeToString = (item: unknown): string => {
+    if (typeof item === "string") return item;
+    if (typeof item === "object" && item !== null) {
+      const obj = item as Record<string, unknown>;
+      return obj.action as string || obj.text as string || JSON.stringify(item);
+    }
+    return String(item);
+  };
+
+  return {
+    brief: parsed.brief,
+    keyPoints: parsed.keyPoints.map(normalizeToString),
+    nextSteps: parsed.nextSteps.map(normalizeToString),
+  };
 }
 
 export { MODEL as SUMMARY_MODEL };

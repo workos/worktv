@@ -118,14 +118,55 @@ async function getZoomAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function listRecordings(accessToken: string, years: number = 3): Promise<ZoomMeeting[]> {
-  const allMeetings: ZoomMeeting[] = [];
+// Fetch a single 30-day window of recordings (with pagination)
+async function fetchDateRange(
+  accessToken: string,
+  from: string,
+  to: string
+): Promise<ZoomMeeting[]> {
+  const meetings: ZoomMeeting[] = [];
+  let nextPageToken: string | undefined;
 
+  do {
+    const url = new URL("https://api.zoom.us/v2/users/me/recordings");
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    url.searchParams.set("page_size", "300");
+    if (nextPageToken) {
+      url.searchParams.set("next_page_token", nextPageToken);
+    }
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to list recordings: ${response.status} - ${error}`);
+    }
+
+    const data = (await response.json()) as ZoomRecordingsResponse;
+
+    if (data.meetings) {
+      meetings.push(...data.meetings);
+    }
+
+    nextPageToken = data.next_page_token;
+  } while (nextPageToken);
+
+  return meetings;
+}
+
+async function listRecordings(accessToken: string, years: number = 3, parallelWindows: number = 6): Promise<ZoomMeeting[]> {
   // Zoom API only allows 30-day ranges, so we need to make multiple requests
   const now = new Date();
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - years);
 
+  // Build all date ranges first
+  const dateRanges: { from: string; to: string }[] = [];
   let currentEnd = new Date(now);
 
   while (currentEnd > startDate) {
@@ -137,49 +178,31 @@ async function listRecordings(accessToken: string, years: number = 3): Promise<Z
       currentStart.setTime(startDate.getTime());
     }
 
-    const from = currentStart.toISOString().split("T")[0];
-    const to = currentEnd.toISOString().split("T")[0];
-
-    console.log(`   Fetching ${from} to ${to}...`);
-
-    // Handle pagination within this date range
-    let nextPageToken: string | undefined;
-
-    do {
-      const url = new URL("https://api.zoom.us/v2/users/me/recordings");
-      url.searchParams.set("from", from);
-      url.searchParams.set("to", to);
-      url.searchParams.set("page_size", "300");
-      if (nextPageToken) {
-        url.searchParams.set("next_page_token", nextPageToken);
-      }
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to list recordings: ${response.status} - ${error}`);
-      }
-
-      const data = (await response.json()) as ZoomRecordingsResponse;
-
-      if (data.meetings) {
-        allMeetings.push(...data.meetings);
-      }
-
-      nextPageToken = data.next_page_token;
-    } while (nextPageToken);
+    dateRanges.push({
+      from: currentStart.toISOString().split("T")[0],
+      to: currentEnd.toISOString().split("T")[0],
+    });
 
     // Move to previous 30-day window
     currentEnd = new Date(currentStart);
     currentEnd.setDate(currentEnd.getDate() - 1);
   }
 
-  return allMeetings;
+  console.log(`   Fetching ${dateRanges.length} date ranges (${parallelWindows} parallel)...`);
+
+  // Fetch all date ranges in parallel
+  const results = await processInParallel(
+    dateRanges,
+    async (range) => {
+      const meetings = await fetchDateRange(accessToken, range.from, range.to);
+      console.log(`   ✓ ${range.from} to ${range.to}: ${meetings.length} recordings`);
+      return meetings;
+    },
+    parallelWindows
+  );
+
+  // Flatten results
+  return results.flat();
 }
 
 async function getRecordingDetails(
@@ -581,8 +604,25 @@ async function processRecording(
     // Get recording details with download token
     const details = await getRecordingDetails(accessToken, meeting.uuid);
 
-    // Try to get meeting summary from Zoom AI
-    const summary = await getMeetingSummary(accessToken, meeting.uuid);
+    // Find files we need to fetch
+    const transcriptFile = findTranscriptFile(details.recording_files);
+    const chatFile = findChatFile(details.recording_files);
+
+    // Fetch summary, transcript, and chat in parallel (independent network calls)
+    const [summary, transcriptContent, chatResult] = await Promise.all([
+      // Fetch meeting summary from Zoom AI
+      getMeetingSummary(accessToken, meeting.uuid),
+      // Fetch transcript if available
+      transcriptFile
+        ? fetchTranscript(accessToken, transcriptFile.download_url)
+        : Promise.resolve(null),
+      // Fetch chat if available
+      chatFile
+        ? fetchChatFile(accessToken, chatFile.download_url)
+            .then((content) => ({ success: true, content }))
+            .catch(() => ({ success: false, content: null }))
+        : Promise.resolve({ success: false, content: null }),
+    ]);
 
     // Use summary, or agenda, or fallback to date
     const description =
@@ -618,14 +658,9 @@ async function processRecording(
       );
     }
 
-    // Fetch and process transcript
-    const transcriptFile = findTranscriptFile(details.recording_files);
+    // Process transcript
     let transcriptInfo = "no transcript";
-    if (transcriptFile) {
-      const transcriptContent = await fetchTranscript(
-        accessToken,
-        transcriptFile.download_url
-      );
+    if (transcriptContent) {
       const segments = parseZoomTranscript(transcriptContent);
       const speakers = extractZoomSpeakers(segments);
 
@@ -634,20 +669,16 @@ async function processRecording(
       transcriptInfo = `${segments.length} segments, ${speakers.length} speakers`;
     }
 
-    // Fetch and process chat messages
-    const chatFile = findChatFile(details.recording_files);
+    // Process chat messages
     let chatInfo = "no chat";
-    if (chatFile) {
-      try {
-        const chatContent = await fetchChatFile(accessToken, chatFile.download_url);
-        const messages = parseChatFile(chatContent, meeting.start_time);
-        if (messages.length > 0) {
-          insertChatMessages(db, recordingId, messages);
-          chatInfo = `${messages.length} chat messages`;
-        }
-      } catch (err) {
-        chatInfo = "chat fetch failed";
+    if (chatResult.success && chatResult.content) {
+      const messages = parseChatFile(chatResult.content, meeting.start_time);
+      if (messages.length > 0) {
+        insertChatMessages(db, recordingId, messages);
+        chatInfo = `${messages.length} chat messages`;
       }
+    } else if (chatFile && !chatResult.success) {
+      chatInfo = "chat fetch failed";
     }
 
     console.log(
@@ -661,13 +692,20 @@ async function processRecording(
   }
 }
 
+// Parse numeric arg like --arg=N
+function parseNumericArg(prefix: string, defaultValue: number): number {
+  const arg = process.argv.find((a) => a.startsWith(`--${prefix}=`));
+  return arg ? parseInt(arg.split("=")[1], 10) : defaultValue;
+}
+
 // Main sync function
 async function sync(): Promise<void> {
   const force = process.argv.includes("--force");
 
-  // Parse --years=N argument (default 3)
-  const yearsArg = process.argv.find((arg) => arg.startsWith("--years="));
-  const years = yearsArg ? parseInt(yearsArg.split("=")[1], 10) : 3;
+  // Parse arguments
+  const years = parseNumericArg("years", 3);
+  const parallelWindows = parseNumericArg("parallel-windows", 6);
+  const parallelRecordings = parseNumericArg("parallel", 5);
 
   console.log("🔄 Starting Zoom sync...\n");
   if (force) {
@@ -684,17 +722,17 @@ async function sync(): Promise<void> {
   const accessToken = await getZoomAccessToken();
   console.log("   ✓ Authenticated\n");
 
-  // List all recordings
+  // List all recordings (with parallel date range fetching)
   console.log(`📋 Fetching recordings list (last ${years} year${years > 1 ? "s" : ""})...`);
-  const meetings = await listRecordings(accessToken, years);
+  const meetings = await listRecordings(accessToken, years, parallelWindows);
   console.log(`   Found ${meetings.length} total recordings\n`);
 
-  // Process recordings in parallel (5 concurrent requests to avoid rate limits)
-  console.log("📥 Syncing recordings (5 parallel)...\n");
+  // Process recordings in parallel
+  console.log(`📥 Syncing recordings (${parallelRecordings} parallel)...\n`);
   const results = await processInParallel(
     meetings,
     (meeting) => processRecording(db, meeting, accessToken, force),
-    5
+    parallelRecordings
   );
 
   const synced = results.filter((r) => r.synced).length;

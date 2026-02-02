@@ -155,13 +155,37 @@ function isRecentlySynced(db: Database.Database, recordingId: string): boolean {
   return syncedAt > oneHourAgo;
 }
 
+// Parallel processing helper with concurrency limit
+async function processInParallel<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < items.length) {
+      const index = currentIndex++;
+      const item = items[index];
+      results[index] = await fn(item);
+    }
+  }
+
+  // Start workers
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+
+  return results;
+}
+
 // Process a single call
-function processCall(
+async function processCall(
   db: Database.Database,
   callData: { metaData: GongCall; parties?: GongParty[]; media?: GongCallMedia },
   transcriptMap: Map<string, GongCallTranscript>,
   force: boolean
-): { synced: boolean; skipped: boolean; title: string } {
+): Promise<{ synced: boolean; skipped: boolean; title: string }> {
   const call = callData.metaData;
   const parties = callData.parties ?? [];
   const media = callData.media;
@@ -242,6 +266,12 @@ function processCall(
   }
 }
 
+// Parse numeric arg like --arg=N
+function parseNumericArg(prefix: string, defaultValue: number): number {
+  const arg = process.argv.find((a) => a.startsWith(`--${prefix}=`));
+  return arg ? parseInt(arg.split("=")[1], 10) : defaultValue;
+}
+
 // Main sync function
 async function sync(): Promise<void> {
   // Check if Gong is configured
@@ -254,9 +284,9 @@ async function sync(): Promise<void> {
 
   const force = process.argv.includes("--force");
 
-  // Parse --months=N argument (default 3)
-  const monthsArg = process.argv.find((arg) => arg.startsWith("--months="));
-  const months = monthsArg ? parseInt(monthsArg.split("=")[1], 10) : 3;
+  // Parse arguments
+  const months = parseNumericArg("months", 3);
+  const parallelCalls = parseNumericArg("parallel", 5);
 
   console.log("🔄 Starting Gong sync...\n");
   if (force) {
@@ -301,57 +331,75 @@ async function sync(): Promise<void> {
   }
 
   // Batch fetch transcripts (Gong allows batch requests)
+  // Fetch multiple batches in parallel for speed
   console.log("📝 Fetching transcripts...");
   const TRANSCRIPT_BATCH_SIZE = 50;
+  const PARALLEL_TRANSCRIPT_BATCHES = 3;
   const MAX_RETRIES_PER_BATCH = 3;
   const transcriptMap = new Map<string, GongCallTranscript>();
 
+  // Build all batches
+  const batches: { startIdx: number; callIds: string[] }[] = [];
   for (let i = 0; i < calls.length; i += TRANSCRIPT_BATCH_SIZE) {
     const batch = calls.slice(i, i + TRANSCRIPT_BATCH_SIZE);
-    const callIds = batch.map((c) => c.metaData.id);
-    let retryCount = 0;
+    batches.push({
+      startIdx: i,
+      callIds: batch.map((c) => c.metaData.id),
+    });
+  }
 
-    while (retryCount < MAX_RETRIES_PER_BATCH) {
-      try {
-        const transcriptResponse = await getTranscripts(callIds);
-        for (const transcript of transcriptResponse.callTranscripts) {
-          transcriptMap.set(transcript.callId, transcript);
-        }
-        console.log(
-          `   Fetched transcripts ${i + 1}-${Math.min(i + TRANSCRIPT_BATCH_SIZE, calls.length)} of ${calls.length}`
-        );
-        break; // Success, exit retry loop
-      } catch (error) {
-        if (error instanceof GongRateLimitError) {
-          retryCount++;
-          if (retryCount >= MAX_RETRIES_PER_BATCH) {
-            console.error(
-              `\n❌ RATE LIMIT ERROR: Exceeded max retries (${MAX_RETRIES_PER_BATCH}) for transcript batch ${i + 1}-${Math.min(i + TRANSCRIPT_BATCH_SIZE, calls.length)}`
-            );
-            console.error(`   Gong is rate limiting requests. Wait ${error.retryAfterSeconds}s and try again.`);
-            console.error(`   You can also try syncing fewer months with --months=1\n`);
-            throw error;
+  console.log(`   ${batches.length} batches of ${TRANSCRIPT_BATCH_SIZE} (${PARALLEL_TRANSCRIPT_BATCHES} parallel)...`);
+
+  // Fetch batches in parallel with retry logic
+  const batchResults = await processInParallel(
+    batches,
+    async (batch) => {
+      let retryCount = 0;
+      while (retryCount < MAX_RETRIES_PER_BATCH) {
+        try {
+          const transcriptResponse = await getTranscripts(batch.callIds);
+          console.log(
+            `   ✓ Batch ${batch.startIdx + 1}-${Math.min(batch.startIdx + TRANSCRIPT_BATCH_SIZE, calls.length)}`
+          );
+          return transcriptResponse.callTranscripts;
+        } catch (error) {
+          if (error instanceof GongRateLimitError) {
+            retryCount++;
+            if (retryCount >= MAX_RETRIES_PER_BATCH) {
+              console.log(
+                `   ⚠️  Batch ${batch.startIdx + 1} failed after ${MAX_RETRIES_PER_BATCH} retries`
+              );
+              return [];
+            }
+            console.log(`   ⏳ Batch ${batch.startIdx + 1} rate limited, waiting ${error.retryAfterSeconds}s...`);
+            await sleep(error.retryAfterSeconds * 1000);
+          } else {
+            console.log(`   ⚠️  Batch ${batch.startIdx + 1} failed: ${error}`);
+            return [];
           }
-          console.log(`   ⏳ Rate limited (attempt ${retryCount}/${MAX_RETRIES_PER_BATCH}), waiting ${error.retryAfterSeconds}s...`);
-          await sleep(error.retryAfterSeconds * 1000);
-        } else {
-          console.log(`   ⚠️  Failed to fetch batch: ${error}`);
-          break; // Non-rate-limit error, skip this batch
         }
       }
+      return [];
+    },
+    PARALLEL_TRANSCRIPT_BATCHES
+  );
+
+  // Collect all transcripts into map
+  for (const transcripts of batchResults) {
+    for (const transcript of transcripts) {
+      transcriptMap.set(transcript.callId, transcript);
     }
   }
 
   console.log(`   Got ${transcriptMap.size} transcripts\n`);
 
-  // Process all calls
-  console.log("📥 Syncing recordings...\n");
-  const results: { synced: boolean; skipped: boolean; title: string }[] = [];
-
-  for (const call of calls) {
-    const result = processCall(db, call, transcriptMap, force);
-    results.push(result);
-  }
+  // Process all calls in parallel
+  console.log(`📥 Syncing recordings (${parallelCalls} parallel)...\n`);
+  const results = await processInParallel(
+    calls,
+    (call) => processCall(db, call, transcriptMap, force),
+    parallelCalls
+  );
 
   const synced = results.filter((r) => r.synced).length;
   const skipped = results.filter((r) => r.skipped).length;

@@ -22,12 +22,7 @@ export default async function RecordingsLayout({ children }: { children: ReactNo
                 className="h-16 w-16"
               />
             </Link>
-            <div className="flex flex-1 justify-center">
-              <h1 className="text-xl font-semibold text-zinc-50 light:text-zinc-900">
-                Let&apos;s watch WorkTV
-              </h1>
-            </div>
-            <div id="nav-title" />
+            <div id="nav-title" className="flex flex-1 justify-center" />
             <div className="flex items-center gap-3">
               <ThemeToggle />
               {isAuthenticated && user && <UserMenu user={user} />}

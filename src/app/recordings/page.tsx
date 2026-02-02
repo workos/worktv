@@ -5,6 +5,7 @@ import {
   searchRecordingsWithSpeaker,
   getSpeakersByRecordingIds,
   getRecordingsPaginated,
+  getRecordingsBySource,
   getAllClipsWithRecordingTitle,
   dbRowToClip,
   type SearchResultRow,
@@ -21,6 +22,7 @@ import { RecordingPreview } from "./recording-preview";
 import { SearchMatchDisplay } from "./search-match-display";
 import { RecordingsInfiniteScroll } from "./recordings-infinite-scroll";
 import { SearchResultsWrapper } from "./search-results-wrapper";
+import { NavTitle } from "@/components/nav-title";
 
 export default async function RecordingsPage({
   searchParams,
@@ -67,6 +69,10 @@ export default async function RecordingsPage({
     recordings = results.map((r) => ({ ...r, match_type: "speaker" as const, match_text: null, match_time: null }));
   } else if (q) {
     recordings = searchRecordingsWithContext(q, sourceFilter);
+  } else if (isCalendarView) {
+    // Calendar view needs all recordings to display the full timeline
+    const allRecordings = getRecordingsBySource(sourceFilter);
+    recordings = allRecordings.map((r) => ({ ...r, match_type: "title" as const, match_text: null, match_time: null }));
   } else {
     // Use paginated query for initial load (faster)
     const result = getRecordingsPaginated(sourceFilter, 20);
@@ -103,6 +109,11 @@ export default async function RecordingsPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <NavTitle>
+        <h1 className="text-xl font-semibold text-zinc-50 light:text-zinc-900">
+          Recordings
+        </h1>
+      </NavTitle>
       <Suspense fallback={<div className="h-10 animate-pulse rounded-xl bg-zinc-800 light:bg-zinc-200" />}>
         <div className="flex flex-wrap items-center gap-3">
           <ViewToggle currentView={isCalendarView ? "calendar" : "list"} />

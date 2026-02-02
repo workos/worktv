@@ -161,6 +161,64 @@ export function getRecordingsBySource(
     .all(source) as RecordingRow[];
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export function getRecordingsPaginated(
+  source: "zoom" | "gong" | "all",
+  limit: number = 20,
+  cursor?: string
+): PaginatedResult<RecordingRow> {
+  const db = getDb();
+  const sourceFilter = source !== "all" ? "AND source = ?" : "";
+
+  // Parse compound cursor (created_at|id) for stable pagination
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
+  if (cursor) {
+    const parts = cursor.split("|");
+    cursorCreatedAt = parts[0];
+    cursorId = parts[1] || null;
+  }
+
+  // Use compound cursor to avoid skipping/duplicating records with same timestamp
+  const cursorFilter = cursorCreatedAt
+    ? cursorId
+      ? "AND (created_at < ? OR (created_at = ? AND id < ?))"
+      : "AND created_at < ?"
+    : "";
+
+  const params: (string | number)[] = [];
+  if (source !== "all") params.push(source);
+  if (cursorCreatedAt) {
+    params.push(cursorCreatedAt);
+    if (cursorId) {
+      params.push(cursorCreatedAt);
+      params.push(cursorId);
+    }
+  }
+  params.push(limit + 1);
+
+  const rows = db
+    .prepare(
+      `SELECT * FROM recordings
+       WHERE duration >= 60 ${sourceFilter} ${cursorFilter}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`
+    )
+    .all(...params) as RecordingRow[];
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const lastItem = items[items.length - 1];
+  const nextCursor = hasMore && lastItem ? `${lastItem.created_at}|${lastItem.id}` : null;
+
+  return { items, hasMore, nextCursor };
+}
+
 export function isMediaUrlExpired(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
   return new Date(expiresAt) < new Date();

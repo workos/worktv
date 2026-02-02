@@ -9,6 +9,7 @@ import {
   useCallback,
   useMemo,
 } from "react";
+import { useSearch } from "./search-context";
 
 interface Speaker {
   name: string;
@@ -25,6 +26,7 @@ export function SearchInput({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { startSearching } = useSearch();
   const [query, setQuery] = useState(defaultValue ?? "");
   const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(
     defaultSpeaker ?? null
@@ -160,6 +162,7 @@ export function SearchInput({
       selectSpeaker(filteredSpeakers[highlightedIndex]);
       return;
     }
+    startSearching();
     startTransition(() => {
       const params = new URLSearchParams(searchParams.toString());
       if (query.trim()) {

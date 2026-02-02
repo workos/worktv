@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useCallback, useState, useMemo, useEffect } from "react";
+import { useRef, useCallback, useState } from "react";
 import type { Recording } from "@/types/video";
-import { createVttBlobUrl } from "@/types/video";
 import { useVideoPlayer } from "@/hooks/use-video-player";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { VideoPlayer } from "@/components/video/video-player";
@@ -12,6 +11,7 @@ import { TranscriptPanel } from "@/components/video/transcript-panel";
 import { ChatPanel } from "@/components/video/chat-panel";
 import { SpeakerTimeline } from "@/components/video/speaker-timeline";
 import { SummaryPanel } from "@/components/summary/summary-panel";
+import { CaptionOverlay } from "@/components/video/caption-overlay";
 import type { AISummary } from "@/types/video";
 
 interface VideoView {
@@ -41,21 +41,6 @@ export function RecordingPlayer({ recording, videoViews = [], summary }: Recordi
 
   const hasChatMessages = (recording.chatMessages?.length ?? 0) > 0;
   const hasTranscript = recording.transcript.length > 0;
-
-  // Generate VTT blob URL from transcript
-  const captionsUrl = useMemo(() => {
-    if (!hasTranscript) return undefined;
-    return createVttBlobUrl(recording.transcript);
-  }, [recording.transcript, hasTranscript]);
-
-  // Clean up blob URL on unmount
-  useEffect(() => {
-    return () => {
-      if (captionsUrl) {
-        URL.revokeObjectURL(captionsUrl);
-      }
-    };
-  }, [captionsUrl]);
 
   // Toggle captions
   const toggleCaptions = useCallback(() => {
@@ -150,15 +135,20 @@ export function RecordingPlayer({ recording, videoViews = [], summary }: Recordi
                 onClick={togglePlay}
               />
             ) : (
-              <VideoPlayer
-                ref={videoRef}
-                src={currentVideoUrl}
-                poster={recording.posterUrl}
-                captionsUrl={captionsUrl}
-                captionsEnabled={captionsEnabled}
-                isPlaying={state.isPlaying}
-                onClick={togglePlay}
-              />
+              <>
+                <VideoPlayer
+                  ref={videoRef}
+                  src={currentVideoUrl}
+                  poster={recording.posterUrl}
+                  isPlaying={state.isPlaying}
+                  onClick={togglePlay}
+                />
+                <CaptionOverlay
+                  segments={recording.transcript}
+                  currentTime={state.currentTime}
+                  enabled={captionsEnabled}
+                />
+              </>
             )}
           </div>
 

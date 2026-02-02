@@ -7,6 +7,7 @@ import {
   getRelatedRecordings,
   getVideoFilesByRecordingId,
   getChatMessagesByRecordingId,
+  getSummaryByRecordingId,
   dbRowToRecording,
   type RecordingRow,
 } from "@/lib/db";
@@ -14,6 +15,8 @@ import { getRecording } from "@/data/mock-recordings";
 import { getZoomAccessToken } from "@/lib/zoom/auth";
 import { RecordingPlayer } from "./recording-player";
 import { LocalDateTime } from "@/components/local-datetime";
+import { SummaryPanel } from "@/components/summary/summary-panel";
+import type { AISummary } from "@/types/video";
 
 const VIEW_TYPE_LABELS: Record<string, string> = {
   shared_screen_with_speaker_view: "Screen + Speaker",
@@ -34,7 +37,7 @@ export default async function RecordingPage({
   // Try mock data first (for demo IDs)
   const mockRecording = getRecording(id);
   if (mockRecording) {
-    return <RecordingPageContent recording={mockRecording} relatedRecordings={[]} videoViews={[]} />;
+    return <RecordingPageContent recording={mockRecording} relatedRecordings={[]} videoViews={[]} summary={null} />;
   }
 
   // Try SQLite database
@@ -48,13 +51,25 @@ export default async function RecordingPage({
   const relatedRecordings = getRelatedRecordings(row.title, id);
   const videoFiles = getVideoFilesByRecordingId(id);
   const chatMessages = getChatMessagesByRecordingId(id);
+  const summaryRow = getSummaryByRecordingId(id);
+  let summary: AISummary | null = null;
+  if (summaryRow) {
+    try {
+      summary = JSON.parse(summaryRow.content) as AISummary;
+    } catch {
+      console.error("Failed to parse stored summary for recording:", id);
+    }
+  }
 
-  // Get fresh access token for video playback
+  // Get fresh access token for video playback (optional - videos work without it in some cases)
   let accessToken: string | undefined;
-  try {
-    accessToken = await getZoomAccessToken();
-  } catch (error) {
-    console.error("Failed to get Zoom access token:", error);
+  const hasZoomCredentials = process.env.ZOOM_ACCOUNT_ID && process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET;
+  if (hasZoomCredentials) {
+    try {
+      accessToken = await getZoomAccessToken();
+    } catch (error) {
+      console.warn("Failed to get Zoom access token:", error);
+    }
   }
 
   const recording = dbRowToRecording(row, segments, speakers, accessToken);
@@ -81,6 +96,7 @@ export default async function RecordingPage({
       recording={{ ...recording, chatMessages: chatMessagesFormatted }}
       relatedRecordings={relatedRecordings}
       videoViews={videoViews}
+      summary={summary}
     />
   );
 }
@@ -99,6 +115,7 @@ function RecordingPageContent({
   recording,
   relatedRecordings,
   videoViews,
+  summary,
 }: {
   recording: {
     id: string;
@@ -126,6 +143,7 @@ function RecordingPageContent({
   };
   relatedRecordings: RecordingRow[];
   videoViews: { viewType: string; label: string; videoUrl: string }[];
+  summary: AISummary | null;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -139,6 +157,8 @@ function RecordingPageContent({
           )}
         </div>
       </header>
+
+      <SummaryPanel summary={summary} recordingId={recording.id} hasTranscript={recording.transcript.length > 0} />
 
       <RecordingPlayer recording={recording} videoViews={videoViews} />
 

@@ -50,3 +50,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_recording ON chat_messages(recording_id);
+
+CREATE TABLE IF NOT EXISTS summaries (
+  id TEXT PRIMARY KEY,
+  recording_id TEXT NOT NULL UNIQUE,
+  content TEXT NOT NULL,
+  model TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_summaries_recording ON summaries(recording_id);

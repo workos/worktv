@@ -13,6 +13,12 @@ export interface ChatMessage {
   message: string;
 }
 
+export interface AISummary {
+  brief: string;
+  keyPoints: string[];
+  nextSteps: string[];
+}
+
 export interface Speaker {
   id: string;
   name: string;

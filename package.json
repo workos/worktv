@@ -10,6 +10,7 @@
     "sync": "tsx scripts/sync-zoom.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.2.3",
     "next": "16.1.6",

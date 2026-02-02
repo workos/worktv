@@ -68,6 +68,14 @@ export interface ChatMessageRow {
   message: string;
 }
 
+export interface SummaryRow {
+  id: string;
+  recording_id: string;
+  content: string;
+  model: string;
+  generated_at: string;
+}
+
 // Query functions
 export function getAllRecordings(): RecordingRow[] {
   const db = getDb();
@@ -389,3 +397,30 @@ export function insertChatMessages(
 
   insertMany(messages);
 }
+
+export function getSummaryByRecordingId(recordingId: string): SummaryRow | undefined {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM summaries WHERE recording_id = ?`)
+    .get(recordingId) as SummaryRow | undefined;
+}
+
+export function upsertSummary(summary: {
+  recordingId: string;
+  content: string;
+  model: string;
+}): void {
+  const db = getDb();
+  const id = `summary-${summary.recordingId}`;
+  db.prepare(
+    `INSERT OR REPLACE INTO summaries (id, recording_id, content, model, generated_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    summary.recordingId,
+    summary.content,
+    summary.model,
+    new Date().toISOString()
+  );
+}
+

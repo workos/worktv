@@ -31,7 +31,7 @@ export function SummaryPanel({ summary, recordingId, hasTranscript, onToggleVisi
       if (!response.ok) {
         let errorMessage = "Failed to generate summary";
         try {
-          const data = await response.json();
+          const data = await response.json() as { error?: string };
           errorMessage = data.error || errorMessage;
         } catch {
           errorMessage = `Failed to generate summary (${response.status})`;
@@ -39,7 +39,7 @@ export function SummaryPanel({ summary, recordingId, hasTranscript, onToggleVisi
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { summary: { brief: string; keyPoints: string[]; nextSteps: string[] } };
       setCurrentSummary(data.summary);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate summary");

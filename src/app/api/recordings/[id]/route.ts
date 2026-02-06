@@ -45,7 +45,7 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const body = await request.json();
+    const body = await request.json() as { customTitle?: string };
     const { customTitle } = body;
 
     // Verify recording exists

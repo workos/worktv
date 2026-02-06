@@ -70,7 +70,11 @@ export function RecordingsInfiniteScroll({
         params.set("includeSummaries", "true");
       }
       const response = await fetch(`/api/recordings/paginated?${params}`);
-      const data = await response.json();
+      const data = await response.json() as {
+        recordings: RecordingWithMeta[];
+        hasMore: boolean;
+        nextCursor: string | null;
+      };
 
       setRecordings((prev) => [...prev, ...data.recordings]);
       setHasMore(data.hasMore);

@@ -70,7 +70,7 @@ export function SearchInput({
     fetch("/api/speakers")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch speakers");
-        return res.json();
+        return res.json() as Promise<Speaker[]>;
       })
       .then(setSpeakers)
       .catch((err) => {
@@ -80,7 +80,7 @@ export function SearchInput({
     fetch("/api/participants")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch participants");
-        return res.json();
+        return res.json() as Promise<Participant[]>;
       })
       .then(setParticipants)
       .catch((err) => {

@@ -85,7 +85,7 @@ export function ClipCreator({
           signal: controller.signal,
         });
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as { title?: string };
           const newTitle = data.title || "";
           setSuggestedTitle(newTitle);
           // Only auto-fill if user hasn't manually edited
@@ -239,11 +239,11 @@ export function ClipCreator({
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json() as { error?: string };
         throw new Error(data.error || "Failed to create clip");
       }
 
-      const clip = await response.json();
+      const clip = await response.json() as { id: string; startTime: number; endTime: number; title: string | null };
 
       // Copy shareable URL to clipboard
       const shareUrl = `${window.location.origin}/c/${clip.id}`;

@@ -90,7 +90,7 @@ async function getAppliedMigrations(): Promise<Set<string>> {
 
 async function recordMigration(name: string): Promise<void> {
   const now = new Date().toISOString();
-  const sql = `INSERT INTO _migrations (name, applied_at) VALUES ('${name}', '${now}')`;
+  const sql = `INSERT OR IGNORE INTO _migrations (name, applied_at) VALUES ('${name}', '${now}')`;
   const result = await executeD1Query(sql);
 
   if (!result.success) {
@@ -117,8 +117,10 @@ async function applyMigration(filename: string): Promise<void> {
   // Split SQL into individual statements (D1 API requires one statement at a time)
   const statements = sql
     .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .map((s) =>
+      s.split("\n").filter((line) => !line.trimStart().startsWith("--")).join("\n").trim()
+    )
+    .filter((s) => s.length > 0);
 
   for (const statement of statements) {
     const result = await executeD1Query(statement);

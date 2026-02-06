@@ -33,6 +33,12 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .open-next
+
   deploy:
     runs-on: ubuntu-latest
     name: Deploy to Production
@@ -52,10 +58,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build for Cloudflare
-        run: npm run build:cloudflare
-        env:
-          NODE_ENV: production
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: .open-next
 
       - name: Run database migrations
         run: npm run migrate

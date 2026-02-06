@@ -37,7 +37,6 @@ export function ClipCreator({
   const [isPlaying, setIsPlaying] = useState(false);
   const [settingPoint, setSettingPoint] = useState<"in" | "out" | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<"start" | "end" | null>(null);
-  const [suggestedTitle, setSuggestedTitle] = useState("");
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   const clipDuration = endTime - startTime;
@@ -64,7 +63,6 @@ export function ClipCreator({
   // Generate AI title when clip range changes (debounced)
   useEffect(() => {
     if (clipSegments.length === 0) {
-      setSuggestedTitle("");
       return;
     }
 
@@ -87,7 +85,6 @@ export function ClipCreator({
         if (response.ok) {
           const data = await response.json() as { title?: string };
           const newTitle = data.title || "";
-          setSuggestedTitle(newTitle);
           // Only auto-fill if user hasn't manually edited
           if (!userEditedTitle) {
             setTitle(newTitle);

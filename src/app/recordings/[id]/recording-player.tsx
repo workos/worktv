@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useState, useEffect } from "react";
-import type { Recording, Clip, Participant } from "@/types/video";
+import type { Recording, Clip } from "@/types/video";
 import { useVideoPlayer } from "@/hooks/use-video-player";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { VideoPlayer } from "@/components/video/video-player";
@@ -34,13 +34,6 @@ interface RecordingPlayerProps {
 }
 
 type LeftPanelTab = "summary" | "transcript" | "clips" | "participants";
-
-const TAB_LABELS: Record<LeftPanelTab, string> = {
-  summary: "AI Summary",
-  transcript: "Transcript",
-  clips: "Clips",
-  participants: "Participants",
-};
 
 export function RecordingPlayer({ recording, videoViews = [], summary, activeClip, clips = [], participants = [] }: RecordingPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);

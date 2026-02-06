@@ -7,6 +7,7 @@ export function NavTitle({ children }: { children: ReactNode }) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContainer(document.getElementById("nav-title"));
   }, []);
 

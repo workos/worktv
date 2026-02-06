@@ -12,23 +12,34 @@
  * Environment variables required:
  *   - CLOUDFLARE_API_TOKEN: Cloudflare API token with D1 permissions
  *   - CLOUDFLARE_ACCOUNT_ID: Your Cloudflare account ID
- *   - D1_DATABASE_ID: The D1 database ID (from wrangler.toml)
+ *
+ * The D1 database ID is read from wrangler.toml.
  */
 
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 
+function getD1DatabaseId(): string {
+  const wranglerPath = join(process.cwd(), "wrangler.toml");
+  const content = readFileSync(wranglerPath, "utf-8");
+  const match = content.match(/database_id\s*=\s*"([^"]+)"/);
+  if (!match) {
+    throw new Error("Could not find database_id in wrangler.toml");
+  }
+  return match[1];
+}
+
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 
-if (!CLOUDFLARE_API_TOKEN || !CLOUDFLARE_ACCOUNT_ID || !D1_DATABASE_ID) {
+if (!CLOUDFLARE_API_TOKEN || !CLOUDFLARE_ACCOUNT_ID) {
   console.error("❌ Missing required environment variables:");
   if (!CLOUDFLARE_API_TOKEN) console.error("   - CLOUDFLARE_API_TOKEN");
   if (!CLOUDFLARE_ACCOUNT_ID) console.error("   - CLOUDFLARE_ACCOUNT_ID");
-  if (!D1_DATABASE_ID) console.error("   - D1_DATABASE_ID");
   process.exit(1);
 }
+
+const D1_DATABASE_ID = getD1DatabaseId();
 
 const D1_API_BASE = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}`;
 

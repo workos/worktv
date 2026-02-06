@@ -8,13 +8,13 @@ export async function GET(
   const { clipId } = await params;
 
   try {
-    const clipRow = getClipById(clipId);
+    const clipRow = await getClipById(clipId);
 
     if (!clipRow) {
       return NextResponse.json({ error: "Clip not found" }, { status: 404 });
     }
 
-    const recording = getRecordingById(clipRow.recording_id);
+    const recording = await getRecordingById(clipRow.recording_id);
     const clip = {
       ...dbRowToClip(clipRow),
       recordingTitle: recording?.title ?? "Unknown Recording",
@@ -37,7 +37,7 @@ export async function DELETE(
   const { clipId } = await params;
 
   try {
-    const deleted = deleteClip(clipId);
+    const deleted = await deleteClip(clipId);
 
     if (!deleted) {
       return NextResponse.json({ error: "Clip not found" }, { status: 404 });

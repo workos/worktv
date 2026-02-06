@@ -15,13 +15,13 @@ export async function generateMetadata({
   params: Promise<{ clipId: string }>;
 }): Promise<Metadata> {
   const { clipId } = await params;
-  const clipRow = getClipById(clipId);
+  const clipRow = await getClipById(clipId);
 
   if (!clipRow) {
     return { title: "Clip Not Found" };
   }
 
-  const recording = getRecordingById(clipRow.recording_id);
+  const recording = await getRecordingById(clipRow.recording_id);
   const clip = dbRowToClip(clipRow);
   const duration = formatDuration(clip.endTime - clip.startTime);
   const recordingTitle = recording?.custom_title ?? recording?.title ?? "Recording";
@@ -51,7 +51,7 @@ export default async function ClipRedirectPage({
   params: Promise<{ clipId: string }>;
 }) {
   const { clipId } = await params;
-  const clipRow = getClipById(clipId);
+  const clipRow = await getClipById(clipId);
 
   if (!clipRow) {
     notFound();

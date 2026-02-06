@@ -14,7 +14,7 @@ export async function GET(
   const { id: recordingId } = await params;
 
   try {
-    const recording = getRecordingById(recordingId);
+    const recording = await getRecordingById(recordingId);
     if (!recording) {
       return NextResponse.json(
         { error: "Recording not found" },
@@ -22,7 +22,7 @@ export async function GET(
       );
     }
 
-    const clipRows = getClipsByRecordingId(recordingId);
+    const clipRows = await getClipsByRecordingId(recordingId);
     const clips = clipRows.map(dbRowToClip);
 
     return NextResponse.json(clips);
@@ -42,7 +42,7 @@ export async function POST(
   const { id: recordingId } = await params;
 
   try {
-    const recording = getRecordingById(recordingId);
+    const recording = await getRecordingById(recordingId);
     if (!recording) {
       return NextResponse.json(
         { error: "Recording not found" },
@@ -82,7 +82,7 @@ export async function POST(
     }
 
     const clipId = nanoid(8);
-    const clipRow = insertClip({
+    const clipRow = await insertClip({
       id: clipId,
       recordingId,
       title: title || undefined,

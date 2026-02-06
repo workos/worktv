@@ -3,7 +3,7 @@ import { getAllClipsWithRecordingTitle, dbRowToClip } from "@/lib/db";
 
 export async function GET() {
   try {
-    const clipRows = getAllClipsWithRecordingTitle();
+    const clipRows = await getAllClipsWithRecordingTitle();
     const clips = clipRows.map((row) => ({
       ...dbRowToClip(row),
       recordingTitle: row.recording_title,

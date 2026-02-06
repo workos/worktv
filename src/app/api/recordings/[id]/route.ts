@@ -49,7 +49,7 @@ export async function PATCH(
     const { customTitle } = body;
 
     // Verify recording exists
-    const recording = getRecordingById(id);
+    const recording = await getRecordingById(id);
     if (!recording) {
       return NextResponse.json(
         { error: "Recording not found" },
@@ -58,7 +58,7 @@ export async function PATCH(
     }
 
     // Update custom title (null to revert to original)
-    updateRecordingCustomTitle(id, customTitle ?? null);
+    await updateRecordingCustomTitle(id, customTitle ?? null);
 
     return NextResponse.json({ success: true, customTitle: customTitle ?? null });
   } catch (error) {

@@ -37,7 +37,6 @@ export function ClipCreator({
   const [isPlaying, setIsPlaying] = useState(false);
   const [settingPoint, setSettingPoint] = useState<"in" | "out" | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<"start" | "end" | null>(null);
-  const [suggestedTitle, setSuggestedTitle] = useState("");
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   const clipDuration = endTime - startTime;
@@ -64,7 +63,6 @@ export function ClipCreator({
   // Generate AI title when clip range changes (debounced)
   useEffect(() => {
     if (clipSegments.length === 0) {
-      setSuggestedTitle("");
       return;
     }
 
@@ -85,9 +83,8 @@ export function ClipCreator({
           signal: controller.signal,
         });
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as { title?: string };
           const newTitle = data.title || "";
-          setSuggestedTitle(newTitle);
           // Only auto-fill if user hasn't manually edited
           if (!userEditedTitle) {
             setTitle(newTitle);
@@ -239,11 +236,11 @@ export function ClipCreator({
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json() as { error?: string };
         throw new Error(data.error || "Failed to create clip");
       }
 
-      const clip = await response.json();
+      const clip = await response.json() as { id: string; startTime: number; endTime: number; title: string | null };
 
       // Copy shareable URL to clipboard
       const shareUrl = `${window.location.origin}/c/${clip.id}`;

@@ -74,7 +74,7 @@ export async function generateTranscriptSummary(
   let parsed: AISummary;
   try {
     parsed = JSON.parse(jsonText) as AISummary;
-  } catch (e) {
+  } catch {
     throw new Error(`Failed to parse Claude's response as JSON: ${jsonText.slice(0, 200)}`);
   }
 

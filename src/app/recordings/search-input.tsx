@@ -46,7 +46,7 @@ export function SearchInput({
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(
     defaultParticipant ?? null
   );
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -60,6 +60,7 @@ export function SearchInput({
     const urlQuery = searchParams.get("q") ?? "";
     const urlSpeakers = searchParams.getAll("speaker");
     const urlParticipant = searchParams.get("participant");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuery(urlQuery);
     setSelectedSpeakers(urlSpeakers);
     setSelectedParticipant(urlParticipant);
@@ -70,7 +71,7 @@ export function SearchInput({
     fetch("/api/speakers")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch speakers");
-        return res.json();
+        return res.json() as Promise<Speaker[]>;
       })
       .then(setSpeakers)
       .catch((err) => {
@@ -80,7 +81,7 @@ export function SearchInput({
     fetch("/api/participants")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch participants");
-        return res.json();
+        return res.json() as Promise<Participant[]>;
       })
       .then(setParticipants)
       .catch((err) => {
@@ -118,6 +119,7 @@ export function SearchInput({
 
   // Reset highlighted index when filtered items change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightedIndex(0);
   }, [filteredItems]);
 

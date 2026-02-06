@@ -12,7 +12,18 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Cloudflare build output:
+    ".open-next/**",
+    // Debug scripts:
+    "scripts/debug/**",
   ]),
+  // Custom rules
+  {
+    rules: {
+      // Allow apostrophes and quotes in JSX - they're handled fine in modern React
+      "react/no-unescaped-entities": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

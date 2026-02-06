@@ -1,0 +1,16 @@
+name = "worktv"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".open-next"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "worktv"
+database_id = "b7ceba2a-cbfa-4609-bb95-545164cfe9fe"
+
+# Environment variables (set these in Cloudflare dashboard)
+# ANTHROPIC_API_KEY
+# ZOOM_ACCOUNT_ID
+# ZOOM_CLIENT_ID
+# ZOOM_CLIENT_SECRET

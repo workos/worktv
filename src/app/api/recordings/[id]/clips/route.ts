@@ -50,12 +50,19 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    const body = await request.json() as { startTime?: unknown; endTime?: unknown; title?: unknown };
     const { startTime, endTime, title } = body;
 
     if (typeof startTime !== "number" || typeof endTime !== "number") {
       return NextResponse.json(
         { error: "startTime and endTime are required numbers" },
+        { status: 400 }
+      );
+    }
+
+    if (title !== undefined && typeof title !== "string") {
+      return NextResponse.json(
+        { error: "title must be a string" },
         { status: 400 }
       );
     }

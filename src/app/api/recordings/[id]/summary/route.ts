@@ -14,7 +14,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const summaryRow = getSummaryByRecordingId(id);
+    const summaryRow = await getSummaryByRecordingId(id);
 
     if (!summaryRow) {
       return NextResponse.json(
@@ -46,7 +46,7 @@ export async function POST(
 
   try {
     // Get transcript segments
-    const segments = getSegmentsByRecordingId(id);
+    const segments = await getSegmentsByRecordingId(id);
 
     if (segments.length === 0) {
       return NextResponse.json(
@@ -68,7 +68,7 @@ export async function POST(
     const summary = await generateTranscriptSummary(transcriptSegments);
 
     // Save to database
-    upsertSummary({
+    await upsertSummary({
       recordingId: id,
       content: JSON.stringify(summary),
       model: SUMMARY_MODEL,

@@ -50,7 +50,7 @@ export default async function HomePage({
 
   // If clips view, fetch clips instead of recordings
   if (isClipsView) {
-    const clipRows = getAllClipsWithRecordingTitle();
+    const clipRows = await getAllClipsWithRecordingTitle();
     const clipsWithRecordings = clipRows.map((row) => ({
       ...dbRowToClip(row),
       recordingTitle: row.recording_title,
@@ -76,21 +76,21 @@ export default async function HomePage({
 
   if (speakers.length > 0) {
     // Speaker search - filter by all selected speakers (AND logic)
-    const results = searchRecordingsWithSpeaker(q ?? "", speakers, sourceFilter);
+    const results = await searchRecordingsWithSpeaker(q ?? "", speakers, sourceFilter);
     recordings = results.map((r) => ({ ...r, match_type: "speaker" as const, match_text: null, match_time: null }));
   } else if (participant) {
     // Participant search by email
-    const results = searchRecordingsWithParticipant(q ?? "", participant, sourceFilter);
+    const results = await searchRecordingsWithParticipant(q ?? "", participant, sourceFilter);
     recordings = results.map((r) => ({ ...r, match_type: "speaker" as const, match_text: null, match_time: null }));
   } else if (q) {
-    recordings = searchRecordingsWithContext(q, sourceFilter);
+    recordings = await searchRecordingsWithContext(q, sourceFilter);
   } else if (isCalendarView) {
     // Calendar view needs all recordings to display the full timeline
-    const allRecordings = getRecordingsBySource(sourceFilter);
+    const allRecordings = await getRecordingsBySource(sourceFilter);
     recordings = allRecordings.map((r) => ({ ...r, match_type: "title" as const, match_text: null, match_time: null }));
   } else {
     // Use paginated query for initial load (faster)
-    const result = getRecordingsPaginated(sourceFilter, 20);
+    const result = await getRecordingsPaginated(sourceFilter, 20);
     paginatedResult = {
       items: result.items.map((r) => ({ ...r, match_type: "title" as const, match_text: null, match_time: null })),
       hasMore: result.hasMore,
@@ -107,13 +107,13 @@ export default async function HomePage({
   if (!gongConfigured) missingCredentials.push("Gong");
 
   // Prepare recordings data for client components
-  const speakersByRecording = getSpeakersByRecordingIds(
+  const speakersByRecording = await getSpeakersByRecordingIds(
     recordings.map((r) => r.id)
   );
 
   // Fetch summaries for grid view
   const summariesByRecording = isGridView
-    ? getSummariesByRecordingIds(recordings.map((r) => r.id))
+    ? await getSummariesByRecordingIds(recordings.map((r) => r.id))
     : {};
 
   const recordingsWithMeta = recordings.map((recording) => {
@@ -151,7 +151,7 @@ export default async function HomePage({
           <SourceFilter currentSource={sourceFilter} />
           <SearchInput defaultValue={q} defaultSpeakers={speakers} defaultParticipant={participant} />
           <span className="shrink-0 text-sm text-zinc-500">
-            {getTotalRecordingsCount(sourceFilter)} videos
+            {await getTotalRecordingsCount(sourceFilter)} videos
           </span>
         </div>
       </Suspense>

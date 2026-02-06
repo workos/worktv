@@ -16,15 +16,15 @@ export async function GET(request: Request) {
 
   const sourceFilter = source === "zoom" || source === "gong" ? source : "all";
 
-  const result = getRecordingsPaginated(sourceFilter, limit, cursor);
+  const result = await getRecordingsPaginated(sourceFilter, limit, cursor);
 
-  const speakersByRecording = getSpeakersByRecordingIds(
+  const speakersByRecording = await getSpeakersByRecordingIds(
     result.items.map((r) => r.id)
   );
 
   // Fetch summaries if requested (for grid view)
   const summariesByRecording = includeSummaries
-    ? getSummariesByRecordingIds(result.items.map((r) => r.id))
+    ? await getSummariesByRecordingIds(result.items.map((r) => r.id))
     : {};
 
   const recordingsWithMeta = result.items.map((recording) => {

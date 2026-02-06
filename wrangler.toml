@@ -1,13 +1,21 @@
 name = "worktv"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".open-next"
+main = ".open-next/worker.js"
+compatibility_date = "2026-02-06"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+workers_dev = false
 
-# D1 Database binding
+[assets]
+binding = "ASSETS"
+directory = ".open-next/assets"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "worktv"
 database_id = "b7ceba2a-cbfa-4609-bb95-545164cfe9fe"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
 
 # Environment variables (set these in Cloudflare dashboard)
 # ANTHROPIC_API_KEY

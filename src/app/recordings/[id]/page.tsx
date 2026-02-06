@@ -50,26 +50,26 @@ export default async function RecordingPage({
     return <RecordingPageContent recording={mockRecording} relatedRecordings={[]} videoViews={[]} summary={null} activeClip={null} clips={[]} participants={[]} />;
   }
 
-  // Try SQLite database
-  const row = getRecordingById(id);
+  // Try D1 database
+  const row = await getRecordingById(id);
   if (!row) {
     notFound();
   }
 
-  const segments = getSegmentsByRecordingId(id);
-  const speakers = getSpeakersByRecordingId(id);
-  const participants = getParticipantsByRecordingId(id);
-  const relatedRecordings = getRelatedRecordings(row.title, id);
-  const videoFiles = getVideoFilesByRecordingId(id);
-  const chatMessages = getChatMessagesByRecordingId(id);
-  const summaryRow = getSummaryByRecordingId(id);
-  const clipRows = getClipsByRecordingId(id);
+  const segments = await getSegmentsByRecordingId(id);
+  const speakers = await getSpeakersByRecordingId(id);
+  const participants = await getParticipantsByRecordingId(id);
+  const relatedRecordings = await getRelatedRecordings(row.title, id);
+  const videoFiles = await getVideoFilesByRecordingId(id);
+  const chatMessages = await getChatMessagesByRecordingId(id);
+  const summaryRow = await getSummaryByRecordingId(id);
+  const clipRows = await getClipsByRecordingId(id);
   const clips = clipRows.map(dbRowToClip);
 
   // Get active clip if specified
   let activeClip: Clip | null = null;
   if (clipId) {
-    const clipRow = getClipById(clipId);
+    const clipRow = await getClipById(clipId);
     if (clipRow && clipRow.recording_id === id) {
       activeClip = dbRowToClip(clipRow);
     }

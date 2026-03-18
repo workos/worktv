@@ -1,6 +1,7 @@
 // Cloudflare D1 Database Layer
 // This replaces better-sqlite3 with D1 bindings for Cloudflare Workers
 
+import type { Clip, Recording } from "@/types/video";
 import type {
   RecordingRow,
   SegmentRow,
@@ -13,6 +14,19 @@ import type {
   PaginatedResult,
   ClipWithRecordingRow,
 } from "./index";
+
+export type {
+  RecordingRow,
+  SegmentRow,
+  SpeakerRow,
+  VideoFileRow,
+  ChatMessageRow,
+  SummaryRow,
+  ClipRow,
+  ParticipantRow,
+  PaginatedResult,
+  ClipWithRecordingRow,
+};
 
 // Get D1 database from Cloudflare bindings
 export function getDb(): D1Database {
@@ -393,4 +407,93 @@ export async function getRelatedRecordings(title: string, excludeId: string): Pr
     .bind(title, excludeId)
     .all<RecordingRow>();
   return result.results ?? [];
+}
+
+export async function getSpeakersByRecordingIds(
+  recordingIds: string[]
+): Promise<Record<string, SpeakerRow[]>> {
+  if (recordingIds.length === 0) return {};
+
+  const db = getDb();
+  const placeholders = recordingIds.map(() => "?").join(", ");
+  const result = await db
+    .prepare(`SELECT * FROM speakers WHERE recording_id IN (${placeholders})`)
+    .bind(...recordingIds)
+    .all<SpeakerRow>();
+
+  const rows = result.results ?? [];
+  return rows.reduce<Record<string, SpeakerRow[]>>((acc, row) => {
+    if (!acc[row.recording_id]) acc[row.recording_id] = [];
+    acc[row.recording_id].push(row);
+    return acc;
+  }, {});
+}
+
+export async function getSummariesByRecordingIds(
+  recordingIds: string[]
+): Promise<Record<string, SummaryRow>> {
+  if (recordingIds.length === 0) return {};
+
+  const db = getDb();
+  const placeholders = recordingIds.map(() => "?").join(",");
+  const result = await db
+    .prepare(`SELECT * FROM summaries WHERE recording_id IN (${placeholders})`)
+    .bind(...recordingIds)
+    .all<SummaryRow>();
+
+  const rows = result.results ?? [];
+  const summaries: Record<string, SummaryRow> = {};
+  for (const row of rows) {
+    summaries[row.recording_id] = row;
+  }
+  return summaries;
+}
+
+export function dbRowToClip(row: ClipRow): Clip {
+  return {
+    id: row.id,
+    recordingId: row.recording_id,
+    title: row.title,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    createdAt: row.created_at,
+  };
+}
+
+export function dbRowToRecording(
+  row: RecordingRow,
+  segments: SegmentRow[],
+  speakers: SpeakerRow[],
+  accessToken?: string
+): Recording {
+  const videoUrl =
+    accessToken && row.source === "zoom"
+      ? `${row.video_url}?access_token=${accessToken}`
+      : row.video_url;
+
+  return {
+    id: row.id,
+    title: row.title,
+    customTitle: row.custom_title ?? undefined,
+    description: row.description ?? undefined,
+    videoUrl,
+    posterUrl: undefined,
+    duration: row.duration,
+    space: row.space,
+    source: row.source || "zoom",
+    mediaType: (row.media_type as "video" | "audio") || "video",
+    createdAt: row.created_at,
+    speakers: speakers.map((s) => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+    })),
+    transcript: segments.map((s) => ({
+      id: s.id,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      speaker: s.speaker,
+      text: s.text,
+    })),
+  };
 }

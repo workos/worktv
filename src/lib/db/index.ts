@@ -321,7 +321,8 @@ export function searchRecordingsWithContext(
 ): SearchResultRow[] {
   const db = getDb();
   const searchTerm = `%${escapeLikeWildcards(query)}%`;
-  const sourceFilter = source && source !== "all" ? `AND r.source = '${source}'` : "";
+  const sourceFilter = source && source !== "all" ? `AND r.source = ?` : "";
+  const sourceParam = source && source !== "all" ? source : null;
 
   // Query that determines match type and includes context
   const sql = `
@@ -356,7 +357,8 @@ export function searchRecordingsWithContext(
       searchTerm, searchTerm, searchTerm, // match_type CASE
       searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, // match_text CASE
       searchTerm, searchTerm, searchTerm, searchTerm, // match_time CASE
-      searchTerm, searchTerm, searchTerm, searchTerm // WHERE clause
+      searchTerm, searchTerm, searchTerm, searchTerm, // WHERE clause
+      ...(sourceParam ? [sourceParam] : []) // source filter
     ) as SearchResultRow[];
 }
 

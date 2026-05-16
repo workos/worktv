@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAllClipsWithRecordingTitle, dbRowToClip } from "@/lib/db";
+import { getAllClipsWithRecordingTitle, dbRowToClip } from "@/lib/db/d1";
 
 export async function GET() {
   try {
-    const clipRows = getAllClipsWithRecordingTitle();
+    const clipRows = await getAllClipsWithRecordingTitle();
     const clips = clipRows.map((row) => ({
       ...dbRowToClip(row),
       recordingTitle: row.recording_title,

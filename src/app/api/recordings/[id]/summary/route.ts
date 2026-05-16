@@ -3,7 +3,7 @@ import {
   getSegmentsByRecordingId,
   getSummaryByRecordingId,
   upsertSummary,
-} from "@/lib/db";
+} from "@/lib/db/d1";
 import { generateTranscriptSummary, SUMMARY_MODEL } from "@/lib/ai/summarize";
 import type { AISummary } from "@/types/video";
 
@@ -14,7 +14,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const summaryRow = getSummaryByRecordingId(id);
+    const summaryRow = await getSummaryByRecordingId(id);
 
     if (!summaryRow) {
       return NextResponse.json(
@@ -45,8 +45,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    // Get transcript segments
-    const segments = getSegmentsByRecordingId(id);
+    const segments = await getSegmentsByRecordingId(id);
 
     if (segments.length === 0) {
       return NextResponse.json(
@@ -55,7 +54,6 @@ export async function POST(
       );
     }
 
-    // Transform to the expected format
     const transcriptSegments = segments.map((s) => ({
       id: s.id,
       startTime: s.start_time,
@@ -64,11 +62,9 @@ export async function POST(
       text: s.text,
     }));
 
-    // Generate new summary
     const summary = await generateTranscriptSummary(transcriptSegments);
 
-    // Save to database
-    upsertSummary({
+    await upsertSummary({
       recordingId: id,
       content: JSON.stringify(summary),
       model: SUMMARY_MODEL,

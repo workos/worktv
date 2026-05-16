@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getRecordingDetails,
-  getTranscriptContent,
-} from "@/lib/zoom/recordings";
-import { transformZoomMeeting } from "@/lib/zoom/transform";
-import { updateRecordingCustomTitle, getRecordingById } from "@/lib/db";
+  getRecordingById,
+  updateRecordingCustomTitle,
+} from "@/lib/db/d1";
 
 export async function GET(
   request: Request,
@@ -13,17 +11,11 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const details = await getRecordingDetails(id);
-
-    const recording = await transformZoomMeeting(
-      details,
-      details.download_access_token,
-      getTranscriptContent
-    );
+    const recording = await getRecordingById(id);
 
     if (!recording) {
       return NextResponse.json(
-        { error: "Recording not found or not ready" },
+        { error: "Recording not found" },
         { status: 404 }
       );
     }
@@ -48,8 +40,7 @@ export async function PATCH(
     const body = await request.json() as { customTitle?: string };
     const { customTitle } = body;
 
-    // Verify recording exists
-    const recording = getRecordingById(id);
+    const recording = await getRecordingById(id);
     if (!recording) {
       return NextResponse.json(
         { error: "Recording not found" },
@@ -57,8 +48,7 @@ export async function PATCH(
       );
     }
 
-    // Update custom title (null to revert to original)
-    updateRecordingCustomTitle(id, customTitle ?? null);
+    await updateRecordingCustomTitle(id, customTitle ?? null);
 
     return NextResponse.json({ success: true, customTitle: customTitle ?? null });
   } catch (error) {

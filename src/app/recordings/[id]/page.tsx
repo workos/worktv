@@ -16,7 +16,7 @@ import {
   dbRowToClip,
   type RecordingRow,
   type ParticipantRow,
-} from "@/lib/db";
+} from "@/lib/db/d1";
 import { getRecording } from "@/data/mock-recordings";
 import { getZoomAccessToken } from "@/lib/zoom/auth";
 import { RecordingPlayer } from "./recording-player";
@@ -44,32 +44,29 @@ export default async function RecordingPage({
   const { clip: clipId } = await searchParams;
   const id = decodeURIComponent(rawId);
 
-  // Try mock data first (for demo IDs)
   const mockRecording = getRecording(id);
   if (mockRecording) {
     return <RecordingPageContent recording={mockRecording} relatedRecordings={[]} videoViews={[]} summary={null} activeClip={null} clips={[]} participants={[]} />;
   }
 
-  // Try SQLite database
-  const row = getRecordingById(id);
+  const row = await getRecordingById(id);
   if (!row) {
     notFound();
   }
 
-  const segments = getSegmentsByRecordingId(id);
-  const speakers = getSpeakersByRecordingId(id);
-  const participants = getParticipantsByRecordingId(id);
-  const relatedRecordings = getRelatedRecordings(row.title, id);
-  const videoFiles = getVideoFilesByRecordingId(id);
-  const chatMessages = getChatMessagesByRecordingId(id);
-  const summaryRow = getSummaryByRecordingId(id);
-  const clipRows = getClipsByRecordingId(id);
+  const segments = await getSegmentsByRecordingId(id);
+  const speakers = await getSpeakersByRecordingId(id);
+  const participants = await getParticipantsByRecordingId(id);
+  const relatedRecordings = await getRelatedRecordings(row.title, id);
+  const videoFiles = await getVideoFilesByRecordingId(id);
+  const chatMessages = await getChatMessagesByRecordingId(id);
+  const summaryRow = await getSummaryByRecordingId(id);
+  const clipRows = await getClipsByRecordingId(id);
   const clips = clipRows.map(dbRowToClip);
 
-  // Get active clip if specified
   let activeClip: Clip | null = null;
   if (clipId) {
-    const clipRow = getClipById(clipId);
+    const clipRow = await getClipById(clipId);
     if (clipRow && clipRow.recording_id === id) {
       activeClip = dbRowToClip(clipRow);
     }
@@ -84,7 +81,6 @@ export default async function RecordingPage({
     }
   }
 
-  // Get fresh access token for video playback (returns null if Zoom not configured)
   let accessToken: string | undefined;
   try {
     accessToken = (await getZoomAccessToken()) ?? undefined;
@@ -94,11 +90,9 @@ export default async function RecordingPage({
 
   const recording = dbRowToRecording(row, segments, speakers, accessToken);
 
-  // Check if Gong media URL has expired
   const mediaExpired =
     row.source === "gong" && isMediaUrlExpired(row.media_url_expires_at);
 
-  // Transform video files with labels and access token
   const videoViews = videoFiles.map((vf) => ({
     viewType: vf.view_type,
     label: VIEW_TYPE_LABELS[vf.view_type] || vf.view_type,
@@ -107,7 +101,6 @@ export default async function RecordingPage({
       : vf.video_url,
   }));
 
-  // Transform chat messages
   const chatMessagesFormatted = chatMessages.map((cm) => ({
     id: cm.id,
     timestamp: cm.timestamp,

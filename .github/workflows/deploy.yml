@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - main
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     name: Build and Deploy
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -21,6 +22,11 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      - name: Socket Firewall
+        uses: workos/setup-socket-firewall@ca93dd8aa351f54f4729fe3377a9be23c631c25d
+        with:
+          token: ${{ secrets.PUBLIC_SOCKET_FIREWALL_TOKEN }}
 
       - name: Install dependencies
         run: npm ci
